@@ -16,7 +16,7 @@ jobs:
 
       - name: Check required files
         run: |
-          for f in main.py buildozer.spec icon.png splash.png Sahel.ttf manifest_app_extra.xml xml/file_paths.xml; do
+          for f in main.py buildozer.spec icon.png splash.png logo.png Sahel.ttf manifest_app_extra.xml xml/file_paths.xml; do
             if [ ! -f "$f" ]; then echo "::error::Missing file: $f"; exit 1; fi
           done
           python3 -m py_compile main.py
@@ -88,6 +88,28 @@ jobs:
           done
           ls -R .buildozer/android/platform/build-arm64-v8a/packages | head -20
 
+      - name: Pre-download freetype (savannah.gnu.org hangs)
+        run: |
+          F="freetype-2.10.1.tar.gz"
+          ok=0
+          for URL in \
+            "https://ftp.osuosl.org/pub/blfs/conglomeration/freetype/$F" \
+            "https://downloads.sourceforge.net/project/freetype/freetype2/2.10.1/$F" \
+            "https://download.savannah.gnu.org/releases/freetype/$F"; do
+            echo "Trying $URL"
+            if curl -fL --retry 2 --connect-timeout 20 --max-time 120 -A "Mozilla/5.0" -o "/tmp/$F" "$URL" && tar -tzf "/tmp/$F" >/dev/null 2>&1; then
+              ok=1; echo "OK: $URL"; break
+            fi
+          done
+          if [ "$ok" = "1" ]; then
+            for ARCH in arm64-v8a armeabi-v7a; do
+              D=".buildozer/android/platform/build-$ARCH/packages/freetype"
+              mkdir -p "$D"; cp "/tmp/$F" "$D/$F"; touch "$D/.mark-$F"
+            done
+          else
+            echo "::warning::could not pre-download freetype"
+          fi
+
       - name: Patch python-for-android (browser User-Agent for downloads)
         run: |
           set -e
@@ -111,6 +133,8 @@ jobs:
           _op = _ur.build_opener()
           _op.addheaders = [("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/120.0 Safari/537.36")]
           _ur.install_opener(_op)
+          import socket
+          socket.setdefaulttimeout(60)
           PYEOF
           sed -i '/^p4a\.branch/d;/^p4a\.source_dir/d' buildozer.spec
           sed -i "/^\[app\]/a p4a.source_dir = $PWD/.p4a" buildozer.spec
