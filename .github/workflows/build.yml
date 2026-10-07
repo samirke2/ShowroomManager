@@ -1,1 +1,153 @@
+name: Build Android APK
 
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check required files
+        run: |
+          for f in main.py buildozer.spec icon.png splash.png Sahel.ttf manifest_app_extra.xml xml/file_paths.xml; do
+            if [ ! -f "$f" ]; then echo "::error::Missing file: $f"; exit 1; fi
+          done
+          python3 -m py_compile main.py
+          grep -q "request_android_permissions" main.py || { echo "::error::main.py is not the patched version"; exit 1; }
+          grep -q "androidx.core" buildozer.spec && grep -q "^requirements.*androidx" buildozer.spec && { echo "::error::remove androidx.core from requirements"; exit 1; } || true
+          echo "All files OK"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install system packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y git zip unzip autoconf automake libtool pkg-config \
+            zlib1g-dev libncurses5-dev libncursesw5-dev libtinfo5 cmake libffi-dev \
+            libssl-dev libltdl-dev build-essential ccache
+
+      - name: Install Python tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install buildozer "cython<3" virtualenv "setuptools<70" wheel
+
+      - name: Cache buildozer
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.buildozer
+            .buildozer
+          key: buildozer-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}
+          restore-keys: |
+            buildozer-${{ runner.os }}-
+
+      - name: Pre-download Python sources (python.org blocks 403)
+        run: |
+          set -e
+          for V in 3.10.10 3.10.11; do
+            F="Python-$V.tgz"
+            ok=0
+            for URL in \
+              "https://www.python.org/ftp/python/$V/$F" \
+              "https://mirrors.huaweicloud.com/python/$V/$F" \
+              "https://registry.npmmirror.com/-/binary/python/$V/$F" \
+              "https://mirrors.aliyun.com/python-release/source/$F"; do
+              echo "Trying $URL"
+              if curl -fL --retry 3 -A "Mozilla/5.0 (X11; Linux x86_64)" -o "/tmp/$F" "$URL" && tar -tzf "/tmp/$F" >/dev/null 2>&1; then
+                ok=1; echo "OK: $URL"; break
+              fi
+            done
+            if [ "$ok" = "1" ]; then
+              for ARCH in arm64-v8a armeabi-v7a; do
+                for R in python3 hostpython3; do
+                  D=".buildozer/android/platform/build-$ARCH/packages/$R"
+                  mkdir -p "$D"
+                  cp "/tmp/$F" "$D/$F"
+                  touch "$D/.mark-$F"
+                done
+              done
+            else
+              echo "::warning::could not download $F"
+            fi
+          done
+          ls -R .buildozer/android/platform/build-arm64-v8a/packages | head -20
+
+      - name: Patch python-for-android (browser User-Agent for downloads)
+        run: |
+          set -e
+          git clone --depth 1 --branch v2024.01.21 https://github.com/kivy/python-for-android.git .p4a
+          # reportlab recipe downloads from dead hosts (hg.reportlab.com / reportlab.com/ftp -> 403).
+          # Remove it so p4a installs reportlab 4.x (pure Python) from PyPI instead.
+          rm -rf .p4a/pythonforandroid/recipes/reportlab
+          sed -i -E 's/(^requirements *=.*[=,])reportlab(,|$)/\1reportlab==4.0.9\2/' buildozer.spec
+          # FileProvider: android.extra_manifest_application_arguments only accepts XML *attributes*
+          # (a <provider> element there breaks the manifest), so insert the provider into the template.
+          sed -i '/^android\.extra_manifest_application_arguments/d' buildozer.spec
+          sed -i '/<\/application>/i\    <provider android:name="androidx.core.content.FileProvider" android:authorities="org.samir.samirpythdz.fileprovider" android:exported="false" android:grantUriPermissions="true"><meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths" /></provider>' .p4a/pythonforandroid/bootstraps/sdl2/build/templates/AndroidManifest.tmpl.xml
+          grep -n "provider" .p4a/pythonforandroid/bootstraps/sdl2/build/templates/AndroidManifest.tmpl.xml
+          # p4a copies a *file* resource to res/<dest> literally, so dest must include the file name
+          sed -i 's|^android.add_resources.*|android.add_resources = ./xml/file_paths.xml:xml/file_paths.xml|' buildozer.spec
+          cat >> .p4a/pythonforandroid/recipe.py <<'PYEOF'
+          
+          
+          # --- CI patch: some hosts (python.org, sqlite.org, ...) return 403 to Python-urllib ---
+          import urllib.request as _ur
+          _op = _ur.build_opener()
+          _op.addheaders = [("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/120.0 Safari/537.36")]
+          _ur.install_opener(_op)
+          PYEOF
+          sed -i '/^p4a\.branch/d;/^p4a\.source_dir/d' buildozer.spec
+          sed -i "/^\[app\]/a p4a.source_dir = $PWD/.p4a" buildozer.spec
+          sed -i 's|^source.exclude_dirs = \(.*\)|source.exclude_dirs = \1, .p4a|' buildozer.spec
+          grep -nE "p4a|exclude_dirs|^requirements" buildozer.spec
+
+      - name: Build APK
+        run: |
+          set -o pipefail
+          buildozer -v android debug 2>&1 | tee build.log
+
+      - name: FAILED DOWNLOAD URL (copy this step)
+        if: failure()
+        run: |
+          sed 's/\x1b\[[0-9;]*m//g' build.log | grep -a "Downloading .* from" | tail -n 3 | cut -c1-300 || true
+
+      - name: Show error summary
+        if: failure()
+        run: |
+          echo "===== AROUND FIRST TRACEBACK ====="
+          L=$(grep -n "Traceback" build.log | head -1 | cut -d: -f1)
+          if [ -n "$L" ]; then S=$((L>40 ? L-40 : 1)); sed -n "${S},$((L+45))p" build.log; fi
+          echo "===== DOWNLOADS ====="
+          grep -n -i "download" build.log | tail -n 15 || true
+          echo "===== ERROR LINES ====="
+          grep -nE "ERROR|Error:|error:|FAILED|Traceback|No module|No matching|Exception|not found" build.log | tail -n 40 || true
+
+      - name: Upload APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: samirpythdz-apk
+          path: bin/*.apk
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build.log
