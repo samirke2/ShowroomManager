@@ -671,6 +671,7 @@ TRANSLATIONS = {
         "pdf_regenerated": "تم إعادة توليد ملف PDF",
         "confirm_restore_msg": "سيتم استبدال كل البيانات الحالية. متابعة؟",
         "invalid_backup": "الملف ليس نسخة صالحة",
+        "invalid_file_type": "الرجاء اختيار ملف PDF أو صورة",
         "pypdf_missing": "أضف pypdf لدمج PDF",
         "pick_backup_file": "اختر ملف النسخة الاحتياطية (.db)",
         "search_cars_hint": "ابحث بالاسم، التسجيل...",
@@ -822,6 +823,7 @@ TRANSLATIONS = {
         "pdf_regenerated": "PDF regenere",
         "confirm_restore_msg": "Remplacer toutes les donnees?",
         "invalid_backup": "Sauvegarde invalide",
+        "invalid_file_type": "Veuillez choisir un fichier PDF ou une image",
         "pypdf_missing": "Ajouter pypdf",
         "pick_backup_file": "Choisir sauvegarde (.db)",
         "search_cars_hint": "Chercher...",
@@ -3014,9 +3016,13 @@ class AutoManagerApp(MDApp):
         self.notify(self.tr("lang_changed"))
 
     def build(self):
+        from kivy.core.window import Window
+        Window.clearcolor = (0.95, 0.96, 0.98, 1)
         request_android_permissions()
         self.theme_cls.theme_style = "Light"
         self.theme_cls.primary_palette = "Blue"
+        # حل مشكلة تداخل النصوص والأيقونات في الشريط السفلي
+        self.theme_cls.font_styles["Button"] = ["Roboto", 11, False, "Button"]
         try:
             init_db()
         except Exception as e:
@@ -4725,6 +4731,7 @@ class AutoManagerApp(MDApp):
 
     def open_file_manager(self, mode, ext, hint):
         self.fm_mode = mode
+        self.allowed_exts = ext
         from kivy.utils import platform
         start = os.path.expanduser("~")
         if platform == "android":
@@ -4733,7 +4740,7 @@ class AutoManagerApp(MDApp):
         self.file_manager = MDFileManager(
             exit_manager=self.close_file_manager,
             select_path=self.on_doc_selected,
-            ext=ext,
+            ext=ext if ext else [],  # عرض جميع الملفات إذا كان ext فارغاً
         )
         self.notify(hint)
         self.file_manager.show(start)
@@ -4741,8 +4748,8 @@ class AutoManagerApp(MDApp):
     def start_order_receipt(self):
         self.contract_action_dialog.dismiss()
         self.order_contract_id = self.current_contract_id
-        self.open_file_manager("order", [".pdf", ".jpg", ".jpeg", ".png"],
-                               self.tr("pick_id_file"))
+        # تمرير None لعرض جميع الملفات، ثم نقوم بالتحقق يدوياً في on_doc_selected
+        self.open_file_manager("order", None, self.tr("pick_id_file"))
 
     def close_file_manager(self, *args):
         try: self.file_manager.close()
@@ -4753,8 +4760,21 @@ class AutoManagerApp(MDApp):
             return
         self.close_file_manager()
         if getattr(self, "fm_mode", "") == "restore":
+            if not path.lower().endswith((".db", ".sqlite")):
+                self.notify(self.tr("invalid_file_type"))
+                return
             self.confirm_restore(path)
             return
+        
+        # التحقق من نوع الملف يدوياً لوضع وصل الطلب
+        if getattr(self, "fm_mode", "") == "order":
+            allowed = getattr(self, "allowed_exts", [".pdf", ".jpg", ".jpeg", ".png"])
+            if allowed:
+                ext = os.path.splitext(path)[1].lower()
+                if ext not in [e.lower() for e in allowed]:
+                    self.notify(self.tr("invalid_file_type"))
+                    return
+
         try:
             self.generate_order_pdf(self.order_contract_id, path)
             self.notify(self.tr("order_pdf_success"))
