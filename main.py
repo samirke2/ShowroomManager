@@ -1809,7 +1809,7 @@ KV = '''
     size_hint_y: None
     height: "66dp"
     padding: "14dp", "8dp"
-    spacing: "12dp"
+    spacing: "14dp"
     canvas.before:
         Color:
             rgba: 0.08, 0.45, 0.75, 1
@@ -1821,17 +1821,23 @@ KV = '''
         icon: root.icon
         theme_text_color: "Custom"
         text_color: 1, 1, 1, 1
-        font_size: "34sp"
-        size_hint_x: None
-        width: "44dp"
+        font_size: "30sp"
+        size_hint: None, None
+        size: "48dp", "48dp"
+        halign: "center"
+        valign: "middle"
         pos_hint: {"center_y": .5}
     MDLabel:
         text: root.title
         halign: "right" if app.current_lang == "ar" else "left"
+        valign: "middle"
+        text_size: self.width, None
+        shorten: True
+        shorten_from: "left" if app.current_lang == "ar" else "right"
         theme_text_color: "Custom"
         text_color: 1, 1, 1, 1
         bold: True
-        font_size: "20sp"
+        font_size: "18sp"
 
 <CarDialogContent>:
     orientation: "vertical"
@@ -4882,16 +4888,18 @@ class AutoManagerApp(MDApp):
             return
         L = self.current_lang
         box = MDBoxLayout(orientation="vertical", size_hint_y=None,
-                          spacing=dp(4), padding=[dp(8), dp(2), dp(8), dp(6)],
+                          spacing=dp(8), padding=[dp(10), dp(6), dp(10), dp(12)],
                           adaptive_height=True)
+        box.add_widget(DialogHeader(icon="bank", title=self.trd("bank_edit")))
         fields = []
         for key in ("bank_holder", "bank_name", "bank_agency", "bank_account"):
             box.add_widget(MDLabel(
                 text=self.trd(key), bold=True,
-                size_hint_y=None, height=dp(18), font_size="13sp",
+                size_hint_y=None, height=dp(24), font_size="14sp",
                 halign="right" if L == "ar" else "left",
                 theme_text_color="Custom", text_color=(0.08, 0.45, 0.75, 1)))
-            tf = ArabicField(mode="rectangle", font_size="15sp", size_hint_y=None, height=dp(46))
+            tf = ArabicField(mode="rectangle", font_size="16sp",
+                             size_hint_y=None, height=dp(54))
             set_field_val(tf, self.get_setting(key))
             box.add_widget(tf)
             fields.append((key, tf))
@@ -4910,7 +4918,7 @@ class AutoManagerApp(MDApp):
         self.bank_dialog = self.dlg(
             title="",
             type="custom",
-            content_cls=self.wrap_dialog(box),
+            content_cls=self.wrap_dialog(box, min_height=dp(470)),
             buttons=[self.btn_cancel(lambda x: self.bank_dialog.dismiss()),
                      self.btn_save("save", save)])
         self.bank_dialog.open()
@@ -5116,9 +5124,102 @@ class AutoManagerApp(MDApp):
             pass
         return info
 
+    def _backup_search_dirs(self):
+        roots = []
+        try: roots.append(app_root())
+        except Exception: pass
+        for r in ("/storage/emulated/0/Documents/SamirPythDZ",
+                  "/storage/emulated/0/SamirPythDZ",
+                  "/sdcard/Documents/SamirPythDZ",
+                  "/storage/emulated/0/Download",
+                  "/storage/emulated/0/Documents",
+                  os.path.join(os.path.expanduser("~"), "Documents", "SamirPythDZ"),
+                  os.path.join(os.path.expanduser("~"), "SamirPythDZ"),
+                  os.path.join(os.getcwd(), "SamirPythDZ")):
+            roots.append(r)
+        dirs = []
+        for r in roots:
+            dirs += [r, os.path.join(r, "database")]
+        try: dirs.append(os.path.join(private_dir(), "database"))
+        except Exception: pass
+        try: dirs.append(db_dir())
+        except Exception: pass
+        out, seen = [], set()
+        for d in dirs:
+            try:
+                rp = os.path.realpath(d)
+                if rp in seen or not os.path.isdir(rp):
+                    continue
+                seen.add(rp)
+                out.append(rp)
+            except Exception:
+                pass
+        return out
+
+    def _find_backup_files(self):
+        live = ""
+        try: live = os.path.realpath(get_db_path())
+        except Exception: pass
+        found, seen = [], set()
+        for d in self._backup_search_dirs():
+            try:
+                names = os.listdir(d)
+            except Exception:
+                continue
+            for f in names:
+                if not f.lower().endswith((".db", ".sqlite")):
+                    continue
+                p = os.path.realpath(os.path.join(d, f))
+                if p == live or p in seen or not os.path.isfile(p):
+                    continue
+                seen.add(p)
+                try:
+                    found.append((os.path.getmtime(p), os.path.getsize(p), p))
+                except Exception:
+                    pass
+        found.sort(reverse=True)
+        return found
+
     def start_restore(self):
-        start_dir = db_dir()
-        self.open_file_manager("restore", [], self.tr("pick_backup_file"), start_dir)
+        from kivy.utils import platform
+        browse_dir = "/storage/emulated/0" if platform == "android" else os.path.expanduser("~")
+        files = self._find_backup_files()
+        if not files:
+            self.open_file_manager("restore", [], self.tr("pick_backup_file"), browse_dir)
+            return
+        L = self.current_lang
+        box = MDBoxLayout(orientation="vertical", size_hint_y=None,
+                          spacing=dp(6), padding=[dp(8), dp(6), dp(8), dp(8)],
+                          adaptive_height=True)
+        box.add_widget(DialogHeader(icon="database-import", title=self.trd("restore_db")))
+
+        def pick(path):
+            self.restore_list_dialog.dismiss()
+            self.confirm_restore(path)
+
+        for mt, size, p in files[:40]:
+            when = datetime.datetime.fromtimestamp(mt).strftime("%Y-%m-%d %H:%M")
+            btn = MDFlatButton(
+                text=f"{os.path.basename(p)}\n{when}  -  {size // 1024} KB",
+                size_hint_x=1, size_hint_y=None, height=dp(56),
+                theme_text_color="Custom", text_color=(0.1, 0.15, 0.25, 1),
+                md_bg_color=(0.93, 0.96, 1, 1),
+                on_release=lambda x, p=p: pick(p))
+            box.add_widget(btn)
+
+        def browse(_=None):
+            self.restore_list_dialog.dismiss()
+            self.open_file_manager("restore", [], self.tr("pick_backup_file"), browse_dir)
+
+        self.restore_list_dialog = self.dlg(
+            title="", type="custom",
+            content_cls=self.wrap_dialog(box, min_height=dp(420)),
+            buttons=[MDFlatButton(text=self.trd("cancel"),
+                                  on_release=lambda x: self.restore_list_dialog.dismiss()),
+                     MDRaisedButton(text="Parcourir" if L == "fr" else self.ar("استعراض الملفات"),
+                                    md_bg_color=(0.55, 0.27, 0.68, 1),
+                                    on_release=browse)])
+        self.restore_list_dialog.open()
 
     def confirm_restore(self, path):
         self.restore_dialog = self.dlg(
@@ -5808,17 +5909,14 @@ class AutoManagerApp(MDApp):
         d.bind(on_pre_open=_fix)
         return d
 
-    def wrap_dialog(self, content):
+    def wrap_dialog(self, content, min_height=0):
         from kivy.uix.scrollview import ScrollView
         from kivy.core.window import Window
         limit = Window.height * 0.85
 
         def _adjust_height(dt):
             try:
-                if content.height > limit:
-                    sv.height = limit
-                else:
-                    sv.height = content.height
+                sv.height = min(limit, max(content.height, min_height))
             except Exception:
                 pass
 
