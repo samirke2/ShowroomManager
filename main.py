@@ -5140,6 +5140,26 @@ class AutoManagerApp(MDApp):
             if not {"cars", "clients", "contracts"} <= names:
                 self.notify(self.tr("invalid_backup"))
                 return
+            # النسخة المجانية: لا يُسمح باسترداد نسخة تتجاوز الحدود المجانية
+            if not self.is_premium():
+                bc = sqlite3.connect(path)
+                n_cars = bc.execute("SELECT COUNT(*) FROM cars").fetchone()[0]
+                n_cl = bc.execute("SELECT COUNT(*) FROM clients").fetchone()[0]
+                n_ct = bc.execute("SELECT COUNT(*) FROM contracts").fetchone()[0]
+                bc.close()
+                if (n_cars > FREE_LIMIT_CARS or n_cl > FREE_LIMIT_CLIENTS
+                        or n_ct > FREE_LIMIT_CONTRACTS):
+                    if self.current_lang == "ar":
+                        self.notify(self.ar(
+                            f"النسخة المجانية: هذه النسخة تحتوي {n_cars} سيارة و{n_cl} زبون "
+                            f"و{n_ct} عقد (الحد {FREE_LIMIT_CARS}). فعّل النسخة الكاملة للاسترداد"))
+                    else:
+                        self.notify(
+                            f"Version gratuite : cette sauvegarde contient {n_cars} vehicules, "
+                            f"{n_cl} clients, {n_ct} contrats (limite {FREE_LIMIT_CARS}). "
+                            f"Activez la version complete")
+                    return
+            old_license = self.get_setting("license_key")
             self.backup_db("before_restore")
             src = sqlite3.connect(path)
             dst = sqlite3.connect(get_db_path())
@@ -5147,6 +5167,13 @@ class AutoManagerApp(MDApp):
             dst.close()
             src.close()
             init_db()
+            # الحفاظ على مفتاح التفعيل الحالي (حتى لا تضيع النسخة الكاملة عند استرداد نسخة قديمة)
+            if old_license:
+                lc = sqlite3.connect(get_db_path())
+                lc.execute("INSERT OR REPLACE INTO settings(key, value) VALUES('license_key', ?)",
+                           (old_license,))
+                lc.commit()
+                lc.close()
             self.load_cars()
             self.load_clients()
             self.load_contracts()
