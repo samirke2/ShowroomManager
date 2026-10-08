@@ -5609,7 +5609,7 @@ class AutoManagerApp(MDApp):
                 f"[size=20][b]Samir Pyth_DZ[/b][/size]\n\n"
                 f"النسخة: {APP_VERSION} ({badge})\n\n"
                 "[b]المطوّر[/b]\nكناف سمير\n\n"
-                "[b]التواصل[/b]\nهاتف: +213 553 762 791\nبريد: kenefsamir0@gmail.com\n\n"
+                "[b]التواصل[/b]\nهاتف: 0553762791\nبريد: kenefsamir0@gmail.com\n\n"
                 "[b]سياسة الخصوصية[/b]\n"
                 "هذا التطبيق لا يجمع أي بيانات شخصية.\n"
                 "جميع البيانات تُخزَّن محلياً على جهازك.\n\n"
