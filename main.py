@@ -3850,27 +3850,27 @@ class AutoManagerApp(MDApp):
         reason_msg = reason_msgs.get(reason, reason_msgs[""])
 
         box = MDBoxLayout(orientation="vertical", size_hint_y=None,
-                          spacing=dp(10),
-                          padding=[dp(10), dp(8), dp(10), dp(10)],
+                          spacing=dp(4),
+                          padding=[dp(10), dp(2), dp(10), dp(2)],
                           adaptive_height=True)
         box.add_widget(MDLabel(
             text=self.ar(reason_msg) if L == "ar" else reason_msg,
-            size_hint_y=None, height=dp(40),
+            size_hint_y=None, height=dp(28),
             bold=True, font_size="14sp", halign="center",
             theme_text_color="Custom", text_color=(0.75, 0.22, 0.17, 1)))
 
         f_lbl = MDLabel(text=self.ar(features) if L == "ar" else features,
                         halign="right" if L == "ar" else "left",
-                        size_hint_y=None, font_size="13sp",
+                        size_hint_y=None, font_size="11.5sp",
                         theme_text_color="Custom",
                         text_color=(0.15, 0.15, 0.20, 1))
         f_lbl.bind(width=lambda i, w: setattr(i, "text_size", (w, None)))
-        f_lbl.bind(texture_size=lambda i, ts: setattr(i, "height", ts[1] + 10))
+        f_lbl.bind(texture_size=lambda i, ts: setattr(i, "height", ts[1] + 5))
         box.add_widget(f_lbl)
 
         box.add_widget(MDLabel(
             text=self.ar(T_DEVICE) if L == "ar" else T_DEVICE,
-            size_hint_y=None, height=dp(24), bold=True, font_size="12sp",
+            size_hint_y=None, height=dp(20), bold=True, font_size="12sp",
             halign="right" if L == "ar" else "left",
             theme_text_color="Custom", text_color=(0.08, 0.45, 0.75, 1)))
         did_field = MDTextField(text=device_id, readonly=True,
@@ -3920,13 +3920,13 @@ class AutoManagerApp(MDApp):
         box.add_widget(MDRaisedButton(
             text="WhatsApp",
             md_bg_color=(0.15, 0.68, 0.38, 1),
-            size_hint_y=None, height=dp(52),
+            size_hint_y=None, height=dp(40),
             pos_hint={"center_x": 0.5},
             on_release=open_wa))
 
         box.add_widget(MDLabel(
             text=self.ar(T_CODE) if L == "ar" else T_CODE,
-            size_hint_y=None, height=dp(24), bold=True, font_size="13sp",
+            size_hint_y=None, height=dp(20), bold=True, font_size="13sp",
             halign="right" if L == "ar" else "left",
             theme_text_color="Custom", text_color=(0.08, 0.45, 0.75, 1)))
         code_field = MDTextField(mode="rectangle", font_size="12sp",
@@ -3969,7 +3969,7 @@ class AutoManagerApp(MDApp):
         box.add_widget(MDRaisedButton(
             text=self.ar(T_ACT) if L == "ar" else T_ACT,
             md_bg_color=(0.15, 0.55, 0.32, 1),
-            size_hint_y=None, height=dp(48),
+            size_hint_y=None, height=dp(40),
             pos_hint={"center_x": 0.5},
             on_release=on_activate))
 
@@ -5838,7 +5838,7 @@ class AutoManagerApp(MDApp):
     def wrap_dialog(self, content):
         from kivy.uix.scrollview import ScrollView
         from kivy.core.window import Window
-        limit = Window.height * 0.72
+        limit = Window.height * 0.85
         try: ch = content.height
         except Exception: ch = 0
         if ch and ch <= limit:
