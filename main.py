@@ -2378,7 +2378,9 @@ MDScreen:
                     text_size: self.width, None
 
         MDBottomNavigation:
+            height: dp(82)
             panel_color: 1, 1, 1, 1
+            
             selected_color_background: 0.08, 0.45, 0.75, 0.12
             text_color_active: 0.08, 0.45, 0.75, 1
             text_color_normal: 0.55, 0.55, 0.6, 1
@@ -3084,7 +3086,7 @@ class AutoManagerApp(MDApp):
         self.theme_cls.theme_style = "Light"
         self.theme_cls.primary_palette = "Blue"
         try:
-            self.theme_cls.font_styles["Button"] = ["Roboto", 11, False, "Button"]
+            self.theme_cls.font_styles["Button"] = ["Roboto", 9, False, "Button"]
         except Exception:
             pass
         try:
@@ -4881,7 +4883,7 @@ class AutoManagerApp(MDApp):
             return
         L = self.current_lang
         box = MDBoxLayout(orientation="vertical", size_hint_y=None,
-                          spacing=dp(4), padding=[dp(8), dp(2), dp(8), dp(6)],
+                          spacing=dp(8), padding=[dp(14), dp(10), dp(14), dp(10)],
                           adaptive_height=True)
         fields = []
         for key in ("bank_holder", "bank_name", "bank_agency", "bank_account"):
