@@ -125,7 +125,7 @@ APP_VERSION = "1.1.1"
 FREE_LIMIT_CARS = 3
 FREE_LIMIT_CLIENTS = 3
 FREE_LIMIT_CONTRACTS = 3
-FREE_RESTORE_MAX = 3   # أقصى عدد (سيارات/زبائن/عقود) مسموح باستيراده في النسخة المجانية
+FREE_RESTORE_MAX = 3
 FREE_PRICE_DZD = 15000
 
 PUBLIC_KEY_PEM = """-----BEGIN PUBLIC KEY-----
@@ -1580,19 +1580,45 @@ def doc_folder(doc_type, lang):
 #  الترخيص
 # =====================================================================
 def get_device_id():
+    # 1. أولاً نحاول قراءة المعرّف المخزّن (للتوافق مع المستخدمين الحاليين)
     try:
         conn = sqlite3.connect(get_db_path())
         row = conn.execute("SELECT value FROM settings WHERE key='device_id'").fetchone()
-        if row and row[0]:
-            conn.close()
+        conn.close()
+        if row and row[0] and row[0] != "UNKNOWN":
             return row[0]
-        dev_id = uuid.uuid4().hex[:16].upper()
-        conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('device_id', ?)", (dev_id,))
+    except Exception:
+        pass
+
+    # 2. إذا لم يوجد، نستخدم ANDROID_ID الثابت
+    device_id = None
+    if _kivy_platform == "android":
+        try:
+            from jnius import autoclass
+            PythonActivity = autoclass('org.kivy.android.PythonActivity')
+            Settings = autoclass('android.provider.Settings')
+            Secure = autoclass('android.provider.Settings$Secure')
+            resolver = PythonActivity.mActivity.getContentResolver()
+            aid = Secure.getString(resolver, Settings.Secure.ANDROID_ID)
+            if aid and aid != "9774d56d682e549c":
+                device_id = aid.upper()
+        except Exception as e:
+            print("ANDROID_ID error:", e)
+
+    # 3. احتياطي: UUID عشوائي (في حالة فشل كل شيء)
+    if not device_id:
+        device_id = uuid.uuid4().hex[:16].upper()
+
+    # 4. تخزين المعرّف للاستخدام المستقبلي
+    try:
+        conn = sqlite3.connect(get_db_path())
+        conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('device_id', ?)", (device_id,))
         conn.commit()
         conn.close()
-        return dev_id
     except Exception:
-        return "UNKNOWN"
+        pass
+
+    return device_id
 
 
 def check_activation(device_id, code):
@@ -1753,7 +1779,7 @@ def set_field_val(field, value):
 
 
 # =====================================================================
-#  KV (تم تعديل محاذاة العنوان إلى المنتصف)
+#  KV
 # =====================================================================
 KV = '''
 #:import NoTransition kivy.uix.screenmanager.NoTransition
@@ -2363,7 +2389,7 @@ KV = '''
                 text_color: (1, 1, 1, 1) if root.active_lang == "fr" else (0.35, 0.42, 0.55, 1)
                 font_size: "22sp"
             MDLabel:
-                text: "Français"
+                text: "Francais"
                 font_name: app.font_file if app.font_file else "Roboto"
                 valign: "middle"
                 bold: True
@@ -3655,7 +3681,6 @@ class AutoManagerApp(MDApp):
                                     padding=[dp(8), dp(8), dp(8), dp(8)],
                                     adaptive_height=True)
 
-
             articles_box = MDBoxLayout(orientation="vertical", size_hint_y=None,
                                        spacing=dp(10), adaptive_height=True)
             container.add_widget(articles_box)
@@ -4854,8 +4879,6 @@ class AutoManagerApp(MDApp):
         ], "contract_action_dialog")
 
     def pick_android_document(self, mimes, callback):
-        """منتقي ملفات النظام (SAF): يفتح أي PDF أو صورة مباشرة بدون صلاحية تخزين.
-        الملف المختار يُنسخ إلى مجلد التطبيق ثم يُمرَّر مساره إلى callback."""
         from jnius import autoclass
         from android import activity
         Intent = autoclass('android.content.Intent')
@@ -5444,7 +5467,11 @@ class AutoManagerApp(MDApp):
                     self.notify(self.tr("restore_free_limit").format(
                         c=n_cars, cl=n_cl, ct=n_ct, lim=FREE_RESTORE_MAX))
                     return
+
+            # ⭐ حفظ معرّف الجهاز الحالي ومفتاح التفعيل الحالي قبل الاسترداد
+            old_device_id = get_device_id()
             old_license = self.get_setting("license_key")
+
             self.backup_db("before_restore")
             src = sqlite3.connect(path)
             dst = sqlite3.connect(get_db_path())
@@ -5452,12 +5479,19 @@ class AutoManagerApp(MDApp):
             dst.close()
             src.close()
             init_db()
-            if old_license:   # الحفاظ على مفتاح التفعيل الحالي
-                lc = sqlite3.connect(get_db_path())
+
+            # ⭐ إعادة كتابة معرّف الجهاز الحالي (وليس من النسخة) لمنع نقل التفعيل
+            lc = sqlite3.connect(get_db_path())
+            lc.execute("INSERT OR REPLACE INTO settings(key, value) VALUES('device_id', ?)",
+                       (old_device_id,))
+            if old_license:
                 lc.execute("INSERT OR REPLACE INTO settings(key, value) VALUES('license_key', ?)",
                            (old_license,))
-                lc.commit()
-                lc.close()
+            else:
+                lc.execute("DELETE FROM settings WHERE key='license_key'")
+            lc.commit()
+            lc.close()
+
             self.load_cars()
             self.load_clients()
             self.load_contracts()
@@ -5608,7 +5642,7 @@ class AutoManagerApp(MDApp):
             text = (
                 f"[size=20][b]Samir Pyth_DZ[/b][/size]\n\n"
                 f"النسخة: {APP_VERSION} ({badge})\n\n"
-                "[b]المطوّر[/b]\nكناف سمير\n\n"
+                "[b]المطوّر[/b]\nSamir Pyth_DZ\n\n"
                 "[b]التواصل[/b]\nهاتف: 0553762791\nبريد: kenefsamir0@gmail.com\n\n"
                 "[b]سياسة الخصوصية[/b]\n"
                 "هذا التطبيق لا يجمع أي بيانات شخصية.\n"
@@ -5622,7 +5656,7 @@ class AutoManagerApp(MDApp):
             text = (
                 f"[size=20][b]Samir Pyth_DZ[/b][/size]\n\n"
                 f"Version: {APP_VERSION} ({badge})\n\n"
-                "[b]Developpeur[/b]\nKenef Samir\n\n"
+                "[b]Developpeur[/b]\nSamir Pyth_DZ\n\n"
                 "[b]Contact[/b]\nTel: +213 553 762 791\nEmail: kenefsamir0@gmail.com\n\n"
                 "[b]Confidentialite[/b]\n"
                 "Aucune donnee personnelle collectee.\n"
