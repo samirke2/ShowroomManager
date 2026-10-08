@@ -125,7 +125,7 @@ APP_VERSION = "1.1.1"
 FREE_LIMIT_CARS = 3
 FREE_LIMIT_CLIENTS = 3
 FREE_LIMIT_CONTRACTS = 3
-FREE_RESTORE_MAX = 4   # أقصى عدد (سيارات/زبائن/عقود) مسموح باستيراده في النسخة المجانية
+FREE_RESTORE_MAX = 3   # أقصى عدد (سيارات/زبائن/عقود) مسموح باستيراده في النسخة المجانية
 FREE_PRICE_DZD = 15000
 
 PUBLIC_KEY_PEM = """-----BEGIN PUBLIC KEY-----
@@ -726,6 +726,7 @@ TRANSLATIONS = {
         "pdf_regenerated": "تم إعادة توليد ملف PDF",
         "confirm_restore_msg": "سيتم استبدال كل البيانات الحالية. متابعة؟",
         "invalid_backup": "الملف ليس نسخة صالحة",
+        "allow_files_msg": "فعّل «السماح بالوصول إلى كل الملفات» ثم ارجع وأعد المحاولة",
         "restore_free_limit": "النسخة المجانية: هذه النسخة تحتوي {c} سيارة و{cl} زبون و{ct} عقد (الحد {lim}). فعّل النسخة الكاملة للاسترداد",
         "invalid_file_type": "الرجاء اختيار ملف PDF أو صورة",
         "pypdf_missing": "أضف pypdf لدمج PDF",
@@ -880,6 +881,7 @@ TRANSLATIONS = {
         "pdf_regenerated": "PDF regenere",
         "confirm_restore_msg": "Remplacer toutes les donnees?",
         "invalid_backup": "Sauvegarde invalide",
+        "allow_files_msg": "Activez « Acces a tous les fichiers » puis revenez et reessayez",
         "restore_free_limit": "Version gratuite : cette sauvegarde contient {c} vehicules, {cl} clients, {ct} contrats (limite {lim}). Activez la version complete",
         "invalid_file_type": "Veuillez choisir un fichier PDF ou une image",
         "pypdf_missing": "Ajouter pypdf",
@@ -2363,7 +2365,7 @@ KV = '''
                 text_color: (1, 1, 1, 1) if root.active_lang == "fr" else (0.35, 0.42, 0.55, 1)
                 font_size: "22sp"
             MDLabel:
-                text: "Français"
+                text: "Francais"
                 font_name: app.font_file if app.font_file else "Roboto"
                 valign: "middle"
                 bold: True
@@ -4853,8 +4855,34 @@ class AutoManagerApp(MDApp):
             (self.tr("close"), "close-circle-outline", (0.45, 0.45, 0.5), lambda: self.contract_action_dialog.dismiss()),
         ], "contract_action_dialog")
 
+    def ensure_all_files_access(self):
+        """أندرويد 11+: بدون هذه الصلاحية لا تظهر ملفات PDF في المتصفح (تظهر الصور فقط).
+        تفتح شاشة الإعدادات مرة واحدة؛ يرجع True إذا كانت الصلاحية ممنوحة."""
+        if not IS_ANDROID:
+            return True
+        try:
+            from jnius import autoclass
+            if autoclass('android.os.Build$VERSION').SDK_INT < 30:
+                return True
+            if autoclass('android.os.Environment').isExternalStorageManager():
+                return True
+            Intent = autoclass('android.content.Intent')
+            Settings = autoclass('android.provider.Settings')
+            Uri = autoclass('android.net.Uri')
+            act = autoclass('org.kivy.android.PythonActivity').mActivity
+            intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
+            intent.setData(Uri.parse("package:" + act.getPackageName()))
+            act.startActivity(intent)
+            self.notify(self.tr("allow_files_msg"))
+            return False
+        except Exception as e:
+            print("all-files access error:", e)
+            return True
+
     def open_file_manager(self, mode, ext, hint, start_dir=None):
         self.fm_mode = mode
+        if mode in ("order", "restore") and not self.ensure_all_files_access():
+            return
         self.allowed_exts = ext
         from kivy.utils import platform
         if start_dir is None:
