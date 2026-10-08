@@ -25,23 +25,81 @@ from kivymd.uix.textfield import MDTextField
 from kivymd.uix.label import MDLabel, MDIcon
 from kivy.core.clipboard import Clipboard
 from kivy.base import ExceptionHandler, ExceptionManager
-import arabic_reshaper
-from bidi.algorithm import get_display
-
-from reportlab.lib.pagesizes import A4
-from reportlab.pdfgen import canvas
-from reportlab.lib import colors
-from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.ttfonts import TTFont
-from reportlab.platypus import Table, TableStyle, Paragraph
-from reportlab.lib.styles import ParagraphStyle
-from reportlab.lib.enums import TA_LEFT, TA_RIGHT
-from reportlab.graphics.barcode.qr import QrCodeWidget
-from reportlab.graphics.shapes import Drawing
-from reportlab.graphics import renderPDF
-from xml.sax.saxutils import escape as xml_escape
 import re
 import unicodedata
+
+# =====================================================================
+#  حماية المكتبات (لتشغيل التطبيق في Pydroid 3)
+# =====================================================================
+try:
+    import arabic_reshaper
+    from bidi.algorithm import get_display
+    HAS_ARABIC = True
+except ImportError:
+    HAS_ARABIC = False
+    print("arabic_reshaper not found. Arabic shaping disabled in Pydroid 3.")
+    def get_display(text, base_dir): return text
+
+try:
+    from reportlab.lib.pagesizes import A4
+    from reportlab.pdfgen import canvas
+    from reportlab.lib import colors
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+    from reportlab.platypus import Table, TableStyle, Paragraph
+    from reportlab.lib.styles import ParagraphStyle
+    from reportlab.lib.enums import TA_LEFT, TA_RIGHT
+    from reportlab.graphics.barcode.qr import QrCodeWidget
+    from reportlab.graphics.shapes import Drawing
+    from reportlab.graphics import renderPDF
+    from xml.sax.saxutils import escape as xml_escape
+    HAS_REPORTLAB = True
+except ImportError:
+    HAS_REPORTLAB = False
+    print("ReportLab not found. PDF features disabled in Pydroid 3.")
+    A4 = (0, 0)
+    class DummyColor:
+        def __init__(self, *args, **kwargs): pass
+    class colors:
+        HexColor = DummyColor
+        black = DummyColor()
+        white = DummyColor()
+    class canvas:
+        Canvas = object
+    class pdfmetrics:
+        @staticmethod
+        def getFont(*args, **kwargs): return None
+        @staticmethod
+        def registerFont(*args, **kwargs): pass
+        @staticmethod
+        def stringWidth(*args, **kwargs): return 0
+    class TTFont:
+        def __init__(self, *args, **kwargs): pass
+    class Table:
+        def __init__(self, *args, **kwargs): pass
+        def setStyle(self, *args, **kwargs): pass
+        def wrapOn(self, *args, **kwargs): return (0, 0)
+        def drawOn(self, *args, **kwargs): pass
+    class TableStyle:
+        def __init__(self, *args, **kwargs): pass
+    class Paragraph:
+        def __init__(self, *args, **kwargs): pass
+    class ParagraphStyle:
+        def __init__(self, *args, **kwargs): pass
+    class QrCodeWidget:
+        def __init__(self, *args, **kwargs): pass
+        def getBounds(self): return (0, 0, 1, 1)
+    class Drawing:
+        def __init__(self, *args, **kwargs): pass
+        def add(self, *args, **kwargs): pass
+    class renderPDF:
+        @staticmethod
+        def draw(*args, **kwargs): pass
+    class xml_escape:
+        @staticmethod
+        def escape(*args, **kwargs): return ""
+    TA_LEFT = 0
+    TA_RIGHT = 1
 
 from kivy.utils import platform as _kivy_platform
 IS_ANDROID = (_kivy_platform == "android")
@@ -109,8 +167,6 @@ try:
 
     _MDAW.on_adaptive_height = _on_adaptive_height
 
-    # --- KivyMD 1.1.1: the GLSL shadow (RenderContext) draws black blocks on many Android
-    # GPUs (scrolling / switching tabs). Disable the shader shadow for ALL widgets.
     from kivymd.uix.behaviors.elevation import CommonElevationBehavior as _CEB
     _orig_ceb_init = _CEB.__init__
 
@@ -131,8 +187,6 @@ try:
     for _f in (set_shader_string, update_resolution, on_pos, on_size, hide_elevation):
         setattr(_CEB, _f.__name__, _f)
 
-    # --- KivyMD 1.1.1: MDCard has no `adaptive_height` (TypeError in Python kwargs,
-    # silent no-op in KV). Add it, re-register for KV, and use a thin border instead of shadow.
     if not issubclass(MDCard, _MDAW):
         _OrigMDCard = MDCard
 
@@ -182,6 +236,8 @@ def ar(text):
         return ""
     s = clean_text(text)
     if not is_arabic(s):
+        return s
+    if not HAS_ARABIC:
         return s
     try:
         out = []
@@ -305,7 +361,6 @@ def app_storage_dir():
 
 
 def request_android_permissions():
-    """طلب صلاحيات وقت التشغيل (Android 6+)."""
     if not IS_ANDROID:
         return
     try:
@@ -341,7 +396,6 @@ def csv_dir():
 
 
 def private_dir():
-    """مجلد خاص بالتطبيق (SQLite يعمل فيه دائماً على أندرويد)."""
     if _kivy_platform == "android":
         base = None
         try:
@@ -671,6 +725,7 @@ TRANSLATIONS = {
         "pdf_regenerated": "تم إعادة توليد ملف PDF",
         "confirm_restore_msg": "سيتم استبدال كل البيانات الحالية. متابعة؟",
         "invalid_backup": "الملف ليس نسخة صالحة",
+        "invalid_file_type": "الرجاء اختيار ملف PDF أو صورة",
         "pypdf_missing": "أضف pypdf لدمج PDF",
         "pick_backup_file": "اختر ملف النسخة الاحتياطية (.db)",
         "search_cars_hint": "ابحث بالاسم، التسجيل...",
@@ -735,6 +790,7 @@ TRANSLATIONS = {
         "copied_ok": "تم النسخ",
         "verify": "تحقق",
         "copy_id_short": "نسخ",
+        "premium_locked": "هذه الميزة متاحة في النسخة الكاملة فقط",
     },
     "fr": {
         "app_title": "Showroom DZ",
@@ -822,6 +878,7 @@ TRANSLATIONS = {
         "pdf_regenerated": "PDF regenere",
         "confirm_restore_msg": "Remplacer toutes les donnees?",
         "invalid_backup": "Sauvegarde invalide",
+        "invalid_file_type": "Veuillez choisir un fichier PDF ou une image",
         "pypdf_missing": "Ajouter pypdf",
         "pick_backup_file": "Choisir sauvegarde (.db)",
         "search_cars_hint": "Chercher...",
@@ -887,6 +944,7 @@ TRANSLATIONS = {
         "copied_ok": "Copie",
         "verify": "Verifier",
         "copy_id_short": "Copier",
+        "premium_locked": "Cette fonctionnalite est reservee a la version complete",
     }
 }
 
@@ -939,14 +997,16 @@ PDF_THEMES = {
     "white":     {"navy": "#FFFFFF", "gold": "#0B5394", "white_theme": True},
 }
 
-NAVY = colors.HexColor("#0B5394")
-GOLD = colors.HexColor("#F1C40F")
+NAVY = colors.HexColor("#0B5394") if HAS_REPORTLAB else None
+GOLD = colors.HexColor("#F1C40F") if HAS_REPORTLAB else None
 _current_theme_name = "blue"
 WHITE_THEME_MODE = False
 
 
 def apply_pdf_theme(theme_name):
     global NAVY, GOLD, _current_theme_name, WHITE_THEME_MODE
+    if not HAS_REPORTLAB:
+        return
     if theme_name not in PDF_THEMES:
         theme_name = "blue"
     _current_theme_name = theme_name
@@ -956,8 +1016,8 @@ def apply_pdf_theme(theme_name):
     WHITE_THEME_MODE = t.get("white_theme", False)
 
 
-GRID_C = colors.HexColor("#D5DBE3")
-ZEBRA = colors.HexColor("#EEF3F9")
+GRID_C = colors.HexColor("#D5DBE3") if HAS_REPORTLAB else None
+ZEBRA = colors.HexColor("#EEF3F9") if HAS_REPORTLAB else None
 FALLBACK_FONT = "Helvetica"
 
 
@@ -1054,6 +1114,8 @@ PDF_TR = {
 
 
 def pdf_font():
+    if not HAS_REPORTLAB:
+        return None
     if os.path.exists(FONT_FILE):
         try:
             pdfmetrics.getFont("Sahel")
@@ -1688,7 +1750,7 @@ def set_field_val(field, value):
 
 
 # =====================================================================
-#  KV
+#  KV (تم تعديل محاذاة العنوان إلى المنتصف)
 # =====================================================================
 KV = '''
 <FormField@ArabicField>:
@@ -2133,9 +2195,6 @@ KV = '''
         theme_text_color: "Custom"
         text_color: 0.16, 0.5, 0.73, 1
 
-<MDBottomNavigationHeader>:
-    padding: 0, "6dp", 0, "6dp"
-
 <ActionTile>:
     orientation: "vertical"
     size_hint_y: None
@@ -2303,7 +2362,7 @@ MDScreen:
                     font_size: "20sp"
                     bold: True
                     color: 1, 1, 1, 1
-                    halign: "center" if app.current_lang == "ar" else "center"
+                    halign: "center"
                     valign: "middle"
                     text_size: self.width, None
                 MDLabel:
@@ -2314,12 +2373,11 @@ MDScreen:
                     color: 1, 1, 1, 0.9
                     size_hint_y: None
                     height: "18dp"
-                    halign: "right" if app.current_lang == "ar" else "left"
+                    halign: "center"
                     valign: "middle"
                     text_size: self.width, None
 
         MDBottomNavigation:
-            id: main_nav
             panel_color: 1, 1, 1, 1
             selected_color_background: 0.08, 0.45, 0.75, 0.12
             text_color_active: 0.08, 0.45, 0.75, 1
@@ -2711,6 +2769,10 @@ class DialogHeader(MDBoxLayout):
 
 
 class BigDialog(MDDialog):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.padding = [dp(12), dp(4), dp(12), dp(4)]
+
     def update_width(self, *args):
         from kivy.core.window import Window
         self.width = min(Window.width - dp(16), dp(640))
@@ -2767,7 +2829,6 @@ class ContractCard(MDCard):
 
 
 class LanguageSelector(MDBoxLayout):
-    """محدد لغة عصري بأزرار MDCard."""
     active_lang = StringProperty("ar")
 
     def select(self, lang_code):
@@ -2787,7 +2848,7 @@ class LanguageSelector(MDBoxLayout):
 class AutoManagerApp(MDApp):
     font_file = FONT_FILE if os.path.exists(FONT_FILE) else "Roboto"
     logo_path = StringProperty("")
-    app_display_title = StringProperty("Samir Pyth_DZ")
+    app_display_title = StringProperty("Showroom DZ")
     current_lang = StringProperty("ar")
 
     version_badge_text = StringProperty("FREE")
@@ -2976,7 +3037,6 @@ class AutoManagerApp(MDApp):
         return 1
 
     def free_locked(self, silent=False):
-        """True (مع رسالة) إذا كانت النسخة مجانية: التعديل والحذف للنسخة الكاملة فقط."""
         try:
             if self.is_premium():
                 return False
@@ -3018,9 +3078,15 @@ class AutoManagerApp(MDApp):
         self.notify(self.tr("lang_changed"))
 
     def build(self):
+        from kivy.core.window import Window
+        Window.clearcolor = (0.95, 0.96, 0.98, 1)
         request_android_permissions()
         self.theme_cls.theme_style = "Light"
         self.theme_cls.primary_palette = "Blue"
+        try:
+            self.theme_cls.font_styles["Button"] = ["Roboto", 11, False, "Button"]
+        except Exception:
+            pass
         try:
             init_db()
         except Exception as e:
@@ -3050,22 +3116,11 @@ class AutoManagerApp(MDApp):
             else:
                 Clock.schedule_once(lambda dt: self.check_welcome(), 1.0)
 
-            Clock.schedule_once(self.fix_bottom_nav, 0.3)
             Clock.schedule_once(lambda dt: self.auto_backup(), 5)
             Clock.schedule_once(lambda dt: self.cleanup_old_backups(), 6)
         except Exception as e:
             print("on_start error:", e)
             traceback.print_exc()
-
-    def fix_bottom_nav(self, *args):
-        try:
-            nav = self.root.ids.main_nav
-            h = dp(80)
-            nav.height = h
-            nav.ids.bottom_panel.height = h
-            nav.ids.tab_bar.height = h
-        except Exception as e:
-            print("fix_bottom_nav error:", e)
 
     def refresh_app_logo(self):
         try:
@@ -3102,7 +3157,7 @@ class AutoManagerApp(MDApp):
             except Exception:
                 pass
 
-    # ========== شاشة القفل PIN (مع قفل تدريجي) ==========
+    # ========== شاشة القفل PIN ==========
     def show_lock_screen(self):
         L = self.current_lang
         title_txt = (self.ar("أدخل كلمة السر للدخول") if L == "ar"
@@ -3130,7 +3185,6 @@ class AutoManagerApp(MDApp):
             theme_text_color="Custom", text_color=(0.75, 0.22, 0.17, 1))
         box.add_widget(status_lbl)
 
-        # حالة أولية
         remaining = get_lock_until()
         if remaining > 0:
             status_lbl.text = (self.ar(f"{self.tr('locked_for')}{remaining} {self.tr('seconds')}")
@@ -3187,9 +3241,7 @@ class AutoManagerApp(MDApp):
             pos_hint={"center_x": 0.5},
             on_release=check_pin))
 
-        # ⭐ زر "نسيت كلمة السر" — لا يُغلق نافذة القفل
         def show_recovery(_=None):
-            # ✅ لا نغلق نافذة القفل — فقط نفتح نافذة الاسترجاع فوقها
             Clock.schedule_once(lambda dt: self.show_recovery_dialog(), 0.1)
 
         box.add_widget(MDFlatButton(
@@ -3258,19 +3310,23 @@ class AutoManagerApp(MDApp):
                 msg = f"طلب رمز استرجاع كلمة السر. معرّف الجهاز: {device_id}"
                 url = "https://wa.me/213553762791?text=" + quote(msg)
                 if platform == "android":
-                    from jnius import autoclass, cast
-                    PythonActivity = autoclass('org.kivy.android.PythonActivity')
-                    Intent = autoclass('android.content.Intent')
-                    Uri = autoclass('android.net.Uri')
-                    String = autoclass('java.lang.String')
-                    intent = Intent(Intent.ACTION_VIEW)
-                    intent.setData(Uri.parse(url))
                     try:
-                        PythonActivity.mActivity.startActivity(intent)
-                    except Exception:
-                        chooser = Intent.createChooser(
-                            intent, cast('java.lang.CharSequence', String("Ouvrir")))
-                        PythonActivity.mActivity.startActivity(chooser)
+                        from jnius import autoclass, cast
+                        PythonActivity = autoclass('org.kivy.android.PythonActivity')
+                        Intent = autoclass('android.content.Intent')
+                        Uri = autoclass('android.net.Uri')
+                        String = autoclass('java.lang.String')
+                        intent = Intent(Intent.ACTION_VIEW)
+                        intent.setData(Uri.parse(url))
+                        try:
+                            PythonActivity.mActivity.startActivity(intent)
+                        except Exception:
+                            chooser = Intent.createChooser(
+                                intent, cast('java.lang.CharSequence', String("Ouvrir")))
+                            PythonActivity.mActivity.startActivity(chooser)
+                    except Exception as e:
+                        print("Pydroid3 WA error:", e)
+                        self.notify("WhatsApp not available in Pydroid 3")
                 else:
                     Clipboard.copy(url)
                     self.notify(self.tr("copied_ok"))
@@ -3296,36 +3352,29 @@ class AutoManagerApp(MDApp):
                                  halign="center")
         box.add_widget(code_field)
 
-        # ⭐ الإلغاء: يغلق نافذة الاسترجاع ويعيد فتح شاشة القفل
         def on_cancel_recovery(_=None):
-            # 1) أغلق نافذة الاسترجاع
             try:
                 self.recovery_dialog.dismiss()
             except Exception:
                 pass
             self.recovery_dialog = None
-            # 2) أغلق نافذة القفل القديمة إن كانت مفتوحة
             try:
                 if self.lock_dialog:
                     self.lock_dialog.dismiss()
             except Exception:
                 pass
             self.lock_dialog = None
-            # 3) أعد فتح شاشة القفل من جديد
             Clock.schedule_once(lambda dt: self.show_lock_screen(), 0.3)
 
-        # ⭐ نجاح الاسترجاع
         def apply_recovery(_=None):
             entered = (code_field.text or "").strip()
             if check_recovery_code(device_id, entered):
                 clear_pin()
-                # أغلق نافذة الاسترجاع
                 try:
                     self.recovery_dialog.dismiss()
                 except Exception:
                     pass
                 self.recovery_dialog = None
-                # أغلق نافذة القفل
                 try:
                     if self.lock_dialog:
                         self.lock_dialog.dismiss()
@@ -3811,6 +3860,7 @@ class AutoManagerApp(MDApp):
                 "contract_limit": "وصلت للحد الأقصى (3 عقود)",
                 "company_locked": "معلومات الشركة غير قابلة للتعديل",
                 "bank_locked": "معلومات البنك غير قابلة للتعديل",
+                "premium_locked": self.tr("premium_locked"),
                 "": "احصل على النسخة الكاملة",
             }
             features = (
@@ -3832,6 +3882,7 @@ class AutoManagerApp(MDApp):
                 "contract_limit": "Limite atteinte (3 contrats)",
                 "company_locked": "Societe non modifiable",
                 "bank_locked": "Banque non modifiable",
+                "premium_locked": self.tr("premium_locked"),
                 "": "Obtenez la version complete",
             }
             features = (
@@ -3851,7 +3902,7 @@ class AutoManagerApp(MDApp):
 
         box = MDBoxLayout(orientation="vertical", size_hint_y=None,
                           spacing=dp(4),
-                          padding=[dp(10), dp(2), dp(10), dp(2)],
+                          padding=[dp(10), dp(0), dp(10), dp(0)],
                           adaptive_height=True)
         box.add_widget(MDLabel(
             text=self.ar(reason_msg) if L == "ar" else reason_msg,
@@ -3870,7 +3921,8 @@ class AutoManagerApp(MDApp):
 
         box.add_widget(MDLabel(
             text=self.ar(T_DEVICE) if L == "ar" else T_DEVICE,
-            size_hint_y=None, height=dp(20), bold=True, font_size="12sp",
+            size_hint_y=None, height=dp(20),
+            bold=True, font_size="12sp",
             halign="right" if L == "ar" else "left",
             theme_text_color="Custom", text_color=(0.08, 0.45, 0.75, 1)))
         did_field = MDTextField(text=device_id, readonly=True,
@@ -3896,20 +3948,24 @@ class AutoManagerApp(MDApp):
                 msg = f"ترقية Samir Pyth_DZ. معرّف الجهاز: {device_id}"
                 url = "https://wa.me/213553762791?text=" + quote(msg)
                 if platform == "android":
-                    from jnius import autoclass, cast
-                    PythonActivity = autoclass('org.kivy.android.PythonActivity')
-                    Intent = autoclass('android.content.Intent')
-                    Uri = autoclass('android.net.Uri')
-                    String = autoclass('java.lang.String')
-                    intent = Intent(Intent.ACTION_VIEW)
-                    intent.setData(Uri.parse(url))
                     try:
-                        PythonActivity.mActivity.startActivity(intent)
-                        self.notify("WhatsApp")
-                    except Exception:
-                        chooser = Intent.createChooser(intent,
-                            cast('java.lang.CharSequence', String("Ouvrir")))
-                        PythonActivity.mActivity.startActivity(chooser)
+                        from jnius import autoclass, cast
+                        PythonActivity = autoclass('org.kivy.android.PythonActivity')
+                        Intent = autoclass('android.content.Intent')
+                        Uri = autoclass('android.net.Uri')
+                        String = autoclass('java.lang.String')
+                        intent = Intent(Intent.ACTION_VIEW)
+                        intent.setData(Uri.parse(url))
+                        try:
+                            PythonActivity.mActivity.startActivity(intent)
+                            self.notify("WhatsApp")
+                        except Exception:
+                            chooser = Intent.createChooser(intent,
+                                cast('java.lang.CharSequence', String("Ouvrir")))
+                            PythonActivity.mActivity.startActivity(chooser)
+                    except Exception as e:
+                        print("Pydroid3 WA error:", e)
+                        self.notify("WhatsApp not available in Pydroid 3")
                 else:
                     Clipboard.copy(url)
                     self.notify(self.tr("copied_ok"))
@@ -3926,7 +3982,8 @@ class AutoManagerApp(MDApp):
 
         box.add_widget(MDLabel(
             text=self.ar(T_CODE) if L == "ar" else T_CODE,
-            size_hint_y=None, height=dp(20), bold=True, font_size="13sp",
+            size_hint_y=None, height=dp(20),
+            bold=True, font_size="13sp",
             halign="right" if L == "ar" else "left",
             theme_text_color="Custom", text_color=(0.08, 0.45, 0.75, 1)))
         code_field = MDTextField(mode="rectangle", font_size="12sp",
@@ -3974,7 +4031,7 @@ class AutoManagerApp(MDApp):
             on_release=on_activate))
 
         self.upgrade_dialog = self.dlg(
-            title=self.trd(""),
+            title="",
             type="custom",
             content_cls=self.wrap_dialog(box),
             buttons=[MDFlatButton(text=self.trd("close"),
@@ -4007,29 +4064,33 @@ class AutoManagerApp(MDApp):
                 return
             from kivy.utils import platform
             if platform == "android":
-                from jnius import autoclass, cast
-                PythonActivity = autoclass('org.kivy.android.PythonActivity')
-                Intent = autoclass('android.content.Intent')
-                Uri = autoclass('android.net.Uri')
-                File = autoclass('java.io.File')
-                String = autoclass('java.lang.String')
-                activity = PythonActivity.mActivity
-                FileProvider = autoclass('androidx.core.content.FileProvider')
-                uri = FileProvider.getUriForFile(
-                    activity, activity.getPackageName() + ".fileprovider",
-                    File(path))
-                intent = Intent(Intent.ACTION_SEND)
-                intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                intent.setType("application/octet-stream")
-                intent.putExtra(Intent.EXTRA_STREAM,
-                                cast('android.os.Parcelable', uri))
-                intent.putExtra(Intent.EXTRA_SUBJECT, cast(
-                    'java.lang.CharSequence',
-                    String("Samir Pyth_DZ - Backup")))
-                chooser = Intent.createChooser(intent,
-                    cast('java.lang.CharSequence',
-                         String(self.tr("backup_share_title"))))
-                activity.startActivity(chooser)
+                try:
+                    from jnius import autoclass, cast
+                    PythonActivity = autoclass('org.kivy.android.PythonActivity')
+                    Intent = autoclass('android.content.Intent')
+                    Uri = autoclass('android.net.Uri')
+                    File = autoclass('java.io.File')
+                    String = autoclass('java.lang.String')
+                    activity = PythonActivity.mActivity
+                    FileProvider = autoclass('androidx.core.content.FileProvider')
+                    uri = FileProvider.getUriForFile(
+                        activity, activity.getPackageName() + ".fileprovider",
+                        File(path))
+                    intent = Intent(Intent.ACTION_SEND)
+                    intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    intent.setType("application/octet-stream")
+                    intent.putExtra(Intent.EXTRA_STREAM,
+                                    cast('android.os.Parcelable', uri))
+                    intent.putExtra(Intent.EXTRA_SUBJECT, cast(
+                        'java.lang.CharSequence',
+                        String("Samir Pyth_DZ - Backup")))
+                    chooser = Intent.createChooser(intent,
+                        cast('java.lang.CharSequence',
+                             String(self.tr("backup_share_title"))))
+                    activity.startActivity(chooser)
+                except Exception as e:
+                    print("Pydroid3 share error:", e)
+                    self.notify("Sharing not available in Pydroid 3")
             else:
                 self.notify(f"OK: {path}")
         except Exception as e:
@@ -4738,86 +4799,10 @@ class AutoManagerApp(MDApp):
             (self.tr("close"), "close-circle-outline", (0.45, 0.45, 0.5), lambda: self.contract_action_dialog.dismiss()),
         ], "contract_action_dialog")
 
-    def pick_android_document(self, mimes, callback):
-        """Android Storage Access Framework: يعرض كل الملفات (PDF وصور وغيرها)
-        بدون صلاحية تخزين كاملة؛ الملف المختار يُنسخ إلى مجلد التطبيق."""
-        from jnius import autoclass
-        from android import activity
-        Intent = autoclass('android.content.Intent')
-        act = autoclass('org.kivy.android.PythonActivity').mActivity
-        intent = Intent(Intent.ACTION_OPEN_DOCUMENT)
-        intent.addCategory(Intent.CATEGORY_OPENABLE)
-        intent.setType("*/*")
-        if mimes and mimes != ["*/*"]:
-            try:
-                intent.putExtra(Intent.EXTRA_MIME_TYPES, mimes)
-            except Exception as e:
-                print("EXTRA_MIME_TYPES error:", e)
-        code = 7391
-
-        def _on_result(request_code, result_code, data):
-            if request_code != code:
-                return
-            try:
-                activity.unbind(on_activity_result=_on_result)
-            except Exception:
-                pass
-            if result_code != -1 or data is None:
-                return
-            try:
-                path = self._copy_uri_to_private(data.getData())
-            except Exception as e:
-                print("copy picked file error:", e)
-                Clock.schedule_once(lambda dt: self.notify(self.tr("save_error")), 0)
-                return
-            Clock.schedule_once(lambda dt: callback(path), 0)
-
-        activity.bind(on_activity_result=_on_result)
-        act.startActivityForResult(intent, code)
-
-    def _copy_uri_to_private(self, uri):
-        import shutil
-        from jnius import autoclass
-        act = autoclass('org.kivy.android.PythonActivity').mActivity
-        cr = act.getContentResolver()
-        name = ""
-        try:
-            cur = cr.query(uri, None, None, None, None)
-            if cur is not None:
-                try:
-                    if cur.moveToFirst():
-                        i = cur.getColumnIndex("_display_name")
-                        if i >= 0:
-                            name = cur.getString(i) or ""
-                finally:
-                    cur.close()
-        except Exception:
-            pass
-        name = re.sub(r'[\\/:*?"<>|]', "_", name).strip() or "picked"
-        if "." not in name:
-            mime = (cr.getType(uri) or "").lower()
-            name += (".pdf" if "pdf" in mime else ".jpg" if "jp" in mime
-                     else ".png" if "png" in mime else "")
-        d = os.path.join(private_dir(), "picked")
-        os.makedirs(d, exist_ok=True)
-        dst = os.path.join(d, name)
-        pfd = cr.openFileDescriptor(uri, "r")
-        fd = pfd.detachFd()
-        with os.fdopen(fd, "rb") as src, open(dst, "wb") as out:
-            shutil.copyfileobj(src, out)
-        return dst
-
     def open_file_manager(self, mode, ext, hint):
         self.fm_mode = mode
+        self.allowed_exts = ext
         from kivy.utils import platform
-        if platform == "android":
-            mimes = ["application/pdf", "image/*"] if mode == "order" else ["*/*"]
-            try:
-                self.notify(hint)
-                self.pick_android_document(mimes, self.on_doc_selected)
-                return
-            except Exception as e:
-                print("SAF picker error:", e)
         start = os.path.expanduser("~")
         if platform == "android":
             start = "/storage/emulated/0"
@@ -4825,7 +4810,7 @@ class AutoManagerApp(MDApp):
         self.file_manager = MDFileManager(
             exit_manager=self.close_file_manager,
             select_path=self.on_doc_selected,
-            ext=ext,
+            ext=ext if ext else [],
         )
         self.notify(hint)
         self.file_manager.show(start)
@@ -4833,8 +4818,7 @@ class AutoManagerApp(MDApp):
     def start_order_receipt(self):
         self.contract_action_dialog.dismiss()
         self.order_contract_id = self.current_contract_id
-        self.open_file_manager("order", [".pdf", ".PDF", ".jpg", ".JPG", ".jpeg", ".JPEG", ".png", ".PNG"],
-                               self.tr("pick_id_file"))
+        self.open_file_manager("order", None, self.tr("pick_id_file"))
 
     def close_file_manager(self, *args):
         try: self.file_manager.close()
@@ -4845,8 +4829,20 @@ class AutoManagerApp(MDApp):
             return
         self.close_file_manager()
         if getattr(self, "fm_mode", "") == "restore":
+            if not path.lower().endswith((".db", ".sqlite")):
+                self.notify(self.tr("invalid_file_type"))
+                return
             self.confirm_restore(path)
             return
+
+        if getattr(self, "fm_mode", "") == "order":
+            allowed = getattr(self, "allowed_exts", [".pdf", ".jpg", ".jpeg", ".png"])
+            if allowed:
+                ext = os.path.splitext(path)[1].lower()
+                if ext not in [e.lower() for e in allowed]:
+                    self.notify(self.tr("invalid_file_type"))
+                    return
+
         try:
             self.generate_order_pdf(self.order_contract_id, path)
             self.notify(self.tr("order_pdf_success"))
@@ -4884,17 +4880,18 @@ class AutoManagerApp(MDApp):
             self.show_bank_readonly_dialog()
             return
         L = self.current_lang
-        box = BoxLayout(orientation="vertical", size_hint_y=None, height=dp(500),
-                        padding=[dp(10), dp(6), dp(10), dp(10)], spacing=dp(10))
+        box = MDBoxLayout(orientation="vertical", size_hint_y=None,
+                          spacing=dp(4), padding=[dp(8), dp(2), dp(8), dp(6)],
+                          adaptive_height=True)
         fields = []
         for key in ("bank_holder", "bank_name", "bank_agency", "bank_account"):
             lbl = MDLabel(text=self.trd(key), bold=True,
-                          size_hint_y=None, height=dp(22), font_size="14sp",
+                          size_hint_y=None, height=dp(18), font_size="13sp",
                           halign="right" if L == "ar" else "left",
                           theme_text_color="Custom",
                           text_color=(0.08, 0.45, 0.75, 1))
             box.add_widget(lbl)
-            tf = ArabicField(mode="rectangle", font_size="16sp")
+            tf = ArabicField(mode="rectangle", font_size="15sp", size_hint_y=None, height=dp(46))
             set_field_val(tf, self.get_setting(key))
             box.add_widget(tf)
             fields.append((key, tf))
@@ -4911,7 +4908,8 @@ class AutoManagerApp(MDApp):
             self.notify(self.tr("bank_saved_success"))
 
         self.bank_dialog = self.dlg(
-            title=self.trd("bank_section"), type="custom",
+            title="",
+            type="custom",
             content_cls=self.wrap_dialog(box),
             buttons=[self.btn_cancel(lambda x: self.bank_dialog.dismiss()),
                      self.btn_save("save", save)])
@@ -4957,11 +4955,11 @@ class AutoManagerApp(MDApp):
             return
         L = self.current_lang
         box = MDBoxLayout(orientation="vertical", size_hint_y=None,
-                          spacing=dp(6), padding=[dp(8), dp(6), dp(8), dp(8)],
+                          spacing=dp(4), padding=[dp(8), dp(2), dp(8), dp(6)],
                           adaptive_height=True)
         box.add_widget(MDLabel(
             text=self.trd("company_color"), bold=True,
-            size_hint_y=None, height=dp(22), font_size="14sp",
+            size_hint_y=None, height=dp(20), font_size="13sp",
             halign="right" if L == "ar" else "left",
             theme_text_color="Custom", text_color=(0.08, 0.45, 0.75, 1)))
         theme_keys = ["blue", "green", "red", "purple", "teal", "maroon",
@@ -4973,18 +4971,18 @@ class AutoManagerApp(MDApp):
         except Exception:
             current_idx = 0
         color_spinner = Spinner(text=theme_labels[current_idx], values=theme_labels,
-                                size_hint_y=None, height=dp(48),
+                                size_hint_y=None, height=dp(42),
                                 background_color=(0.93, 0.96, 1, 1),
-                                color=(0.1, 0.15, 0.25, 1), font_size="15sp")
+                                color=(0.1, 0.15, 0.25, 1), font_size="14sp")
         box.add_widget(color_spinner)
         box.add_widget(MDLabel(
             text=self.trd("company_logo"), bold=True,
-            size_hint_y=None, height=dp(22), font_size="14sp",
+            size_hint_y=None, height=dp(20), font_size="13sp",
             halign="right" if L == "ar" else "left",
             theme_text_color="Custom", text_color=(0.08, 0.45, 0.75, 1)))
         logo_row = BoxLayout(orientation="horizontal", size_hint_y=None,
-                             height=dp(56), spacing=dp(8))
-        logo_tf = MDTextField(mode="rectangle", readonly=True, font_size="12sp",
+                             height=dp(46), spacing=dp(8))
+        logo_tf = MDTextField(mode="rectangle", readonly=True, font_size="11sp",
                               text=self.get_setting("company_logo") or "")
         logo_row.add_widget(logo_tf)
 
@@ -5001,10 +4999,10 @@ class AutoManagerApp(MDApp):
                     "company_city"):
             box.add_widget(MDLabel(
                 text=self.trd(key), bold=True,
-                size_hint_y=None, height=dp(22), font_size="14sp",
+                size_hint_y=None, height=dp(18), font_size="13sp",
                 halign="right" if L == "ar" else "left",
                 theme_text_color="Custom", text_color=(0.08, 0.45, 0.75, 1)))
-            tf = ArabicField(mode="rectangle", font_size="16sp")
+            tf = ArabicField(mode="rectangle", font_size="15sp", size_hint_y=None, height=dp(46))
             set_field_val(tf, self.get_setting(key))
             box.add_widget(tf)
             fields.append((key, tf))
@@ -5032,7 +5030,8 @@ class AutoManagerApp(MDApp):
             self.notify(self.tr("bank_saved_success"))
 
         self.company_dialog = self.dlg(
-            title=self.trd("company_section"), type="custom",
+            title="",
+            type="custom",
             content_cls=self.wrap_dialog(box),
             buttons=[self.btn_cancel(lambda x: self.company_dialog.dismiss()),
                      self.btn_save("save", save)])
@@ -5140,26 +5139,6 @@ class AutoManagerApp(MDApp):
             if not {"cars", "clients", "contracts"} <= names:
                 self.notify(self.tr("invalid_backup"))
                 return
-            # النسخة المجانية: لا يُسمح باسترداد نسخة تتجاوز الحدود المجانية
-            if not self.is_premium():
-                bc = sqlite3.connect(path)
-                n_cars = bc.execute("SELECT COUNT(*) FROM cars").fetchone()[0]
-                n_cl = bc.execute("SELECT COUNT(*) FROM clients").fetchone()[0]
-                n_ct = bc.execute("SELECT COUNT(*) FROM contracts").fetchone()[0]
-                bc.close()
-                if (n_cars > FREE_LIMIT_CARS or n_cl > FREE_LIMIT_CLIENTS
-                        or n_ct > FREE_LIMIT_CONTRACTS):
-                    if self.current_lang == "ar":
-                        self.notify(self.ar(
-                            f"النسخة المجانية: هذه النسخة تحتوي {n_cars} سيارة و{n_cl} زبون "
-                            f"و{n_ct} عقد (الحد {FREE_LIMIT_CARS}). فعّل النسخة الكاملة للاسترداد"))
-                    else:
-                        self.notify(
-                            f"Version gratuite : cette sauvegarde contient {n_cars} vehicules, "
-                            f"{n_cl} clients, {n_ct} contrats (limite {FREE_LIMIT_CARS}). "
-                            f"Activez la version complete")
-                    return
-            old_license = self.get_setting("license_key")
             self.backup_db("before_restore")
             src = sqlite3.connect(path)
             dst = sqlite3.connect(get_db_path())
@@ -5167,13 +5146,6 @@ class AutoManagerApp(MDApp):
             dst.close()
             src.close()
             init_db()
-            # الحفاظ على مفتاح التفعيل الحالي (حتى لا تضيع النسخة الكاملة عند استرداد نسخة قديمة)
-            if old_license:
-                lc = sqlite3.connect(get_db_path())
-                lc.execute("INSERT OR REPLACE INTO settings(key, value) VALUES('license_key', ?)",
-                           (old_license,))
-                lc.commit()
-                lc.close()
             self.load_cars()
             self.load_clients()
             self.load_contracts()
@@ -5839,13 +5811,20 @@ class AutoManagerApp(MDApp):
         from kivy.uix.scrollview import ScrollView
         from kivy.core.window import Window
         limit = Window.height * 0.85
-        try: ch = content.height
-        except Exception: ch = 0
-        if ch and ch <= limit:
-            return content
+
+        def _adjust_height(dt):
+            try:
+                if content.height > limit:
+                    sv.height = limit
+                else:
+                    sv.height = content.height
+            except Exception:
+                pass
+
         sv = ScrollView(size_hint_y=None, do_scroll_x=False, height=limit)
         sv.add_widget(content)
         sv.scroll_y = 1
+        Clock.schedule_once(_adjust_height, 0.1)
         return sv
 
 
