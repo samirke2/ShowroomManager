@@ -125,6 +125,7 @@ APP_VERSION = "1.1.1"
 FREE_LIMIT_CARS = 3
 FREE_LIMIT_CLIENTS = 3
 FREE_LIMIT_CONTRACTS = 3
+FREE_RESTORE_MAX = 4   # أقصى عدد (سيارات/زبائن/عقود) مسموح باستيراده في النسخة المجانية
 FREE_PRICE_DZD = 15000
 
 PUBLIC_KEY_PEM = """-----BEGIN PUBLIC KEY-----
@@ -725,6 +726,7 @@ TRANSLATIONS = {
         "pdf_regenerated": "تم إعادة توليد ملف PDF",
         "confirm_restore_msg": "سيتم استبدال كل البيانات الحالية. متابعة؟",
         "invalid_backup": "الملف ليس نسخة صالحة",
+        "restore_free_limit": "النسخة المجانية: هذه النسخة تحتوي {c} سيارة و{cl} زبون و{ct} عقد (الحد {lim}). فعّل النسخة الكاملة للاسترداد",
         "invalid_file_type": "الرجاء اختيار ملف PDF أو صورة",
         "pypdf_missing": "أضف pypdf لدمج PDF",
         "pick_backup_file": "اختر ملف النسخة الاحتياطية (.db)",
@@ -878,6 +880,7 @@ TRANSLATIONS = {
         "pdf_regenerated": "PDF regenere",
         "confirm_restore_msg": "Remplacer toutes les donnees?",
         "invalid_backup": "Sauvegarde invalide",
+        "restore_free_limit": "Version gratuite : cette sauvegarde contient {c} vehicules, {cl} clients, {ct} contrats (limite {lim}). Activez la version complete",
         "invalid_file_type": "Veuillez choisir un fichier PDF ou une image",
         "pypdf_missing": "Ajouter pypdf",
         "pick_backup_file": "Choisir sauvegarde (.db)",
@@ -1840,8 +1843,8 @@ KV = '''
 
 <NavTab>:
     orientation: "vertical"
-    padding: "4dp", "6dp", "4dp", "4dp"
-    spacing: "2dp"
+    padding: "4dp", "8dp", "4dp", "6dp"
+    spacing: "4dp"
     radius: [0]
     elevation: 0
     ripple_behavior: True
@@ -1849,6 +1852,7 @@ KV = '''
     MDIcon:
         icon: root.icon
         halign: "center"
+        pos_hint: {"center_x": .5}
         size_hint_y: None
         height: "30dp"
         font_size: "24sp"
@@ -1860,6 +1864,8 @@ KV = '''
         valign: "middle"
         font_size: "12sp"
         bold: True
+        outline_width: 1
+        outline_color: root.color[:3]
         theme_text_color: "Custom"
         text_color: root.color
 
@@ -2774,7 +2780,7 @@ MDScreen:
 
         MDBoxLayout:
             size_hint_y: None
-            height: "64dp"
+            height: "76dp"
             md_bg_color: 1, 1, 1, 1
             canvas.before:
                 Color:
@@ -5349,6 +5355,19 @@ class AutoManagerApp(MDApp):
             if not {"cars", "clients", "contracts"} <= names:
                 self.notify(self.tr("invalid_backup"))
                 return
+            # النسخة المجانية: لا يُسمح باستيراد نسخة فيها أكثر من FREE_RESTORE_MAX
+            if not self.is_premium():
+                bc = sqlite3.connect(path)
+                n_cars = bc.execute("SELECT COUNT(*) FROM cars").fetchone()[0]
+                n_cl = bc.execute("SELECT COUNT(*) FROM clients").fetchone()[0]
+                n_ct = bc.execute("SELECT COUNT(*) FROM contracts").fetchone()[0]
+                bc.close()
+                if (n_cars > FREE_RESTORE_MAX or n_cl > FREE_RESTORE_MAX
+                        or n_ct > FREE_RESTORE_MAX):
+                    self.notify(self.tr("restore_free_limit").format(
+                        c=n_cars, cl=n_cl, ct=n_ct, lim=FREE_RESTORE_MAX))
+                    return
+            old_license = self.get_setting("license_key")
             self.backup_db("before_restore")
             src = sqlite3.connect(path)
             dst = sqlite3.connect(get_db_path())
@@ -5356,6 +5375,12 @@ class AutoManagerApp(MDApp):
             dst.close()
             src.close()
             init_db()
+            if old_license:   # الحفاظ على مفتاح التفعيل الحالي
+                lc = sqlite3.connect(get_db_path())
+                lc.execute("INSERT OR REPLACE INTO settings(key, value) VALUES('license_key', ?)",
+                           (old_license,))
+                lc.commit()
+                lc.close()
             self.load_cars()
             self.load_clients()
             self.load_contracts()
