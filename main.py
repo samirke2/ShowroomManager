@@ -2378,7 +2378,7 @@ MDScreen:
                     text_size: self.width, None
 
         MDBottomNavigation:
-            height: dp(82)
+            height: dp(92)
             panel_color: 1, 1, 1, 1
             
             selected_color_background: 0.08, 0.45, 0.75, 0.12
@@ -4801,13 +4801,14 @@ class AutoManagerApp(MDApp):
             (self.tr("close"), "close-circle-outline", (0.45, 0.45, 0.5), lambda: self.contract_action_dialog.dismiss()),
         ], "contract_action_dialog")
 
-    def open_file_manager(self, mode, ext, hint):
+    def open_file_manager(self, mode, ext, hint, start_dir=None):
         self.fm_mode = mode
         self.allowed_exts = ext
         from kivy.utils import platform
-        start = os.path.expanduser("~")
-        if platform == "android":
-            start = "/storage/emulated/0"
+        if start_dir is None:
+            start_dir = os.path.expanduser("~")
+            if platform == "android":
+                start_dir = "/storage/emulated/0"
         from kivymd.uix.filemanager import MDFileManager
         self.file_manager = MDFileManager(
             exit_manager=self.close_file_manager,
@@ -4815,7 +4816,7 @@ class AutoManagerApp(MDApp):
             ext=ext if ext else [],
         )
         self.notify(hint)
-        self.file_manager.show(start)
+        self.file_manager.show(start_dir)
 
     def start_order_receipt(self):
         self.contract_action_dialog.dismiss()
@@ -4883,7 +4884,7 @@ class AutoManagerApp(MDApp):
             return
         L = self.current_lang
         box = MDBoxLayout(orientation="vertical", size_hint_y=None,
-                          spacing=dp(8), padding=[dp(14), dp(10), dp(14), dp(10)],
+                          spacing=dp(14), padding=[dp(14), dp(24), dp(14), dp(24)],
                           adaptive_height=True)
         fields = []
         for key in ("bank_holder", "bank_name", "bank_agency", "bank_account"):
@@ -5119,7 +5120,8 @@ class AutoManagerApp(MDApp):
         return info
 
     def start_restore(self):
-        self.open_file_manager("restore", [".db", ".sqlite"], self.tr("pick_backup_file"))
+        start_dir = db_dir()
+        self.open_file_manager("restore", [".db", ".sqlite"], self.tr("pick_backup_file"), start_dir)
 
     def confirm_restore(self, path):
         self.restore_dialog = self.dlg(
