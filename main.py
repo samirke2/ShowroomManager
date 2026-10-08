@@ -726,7 +726,6 @@ TRANSLATIONS = {
         "pdf_regenerated": "تم إعادة توليد ملف PDF",
         "confirm_restore_msg": "سيتم استبدال كل البيانات الحالية. متابعة؟",
         "invalid_backup": "الملف ليس نسخة صالحة",
-        "allow_files_msg": "فعّل «السماح بالوصول إلى كل الملفات» ثم ارجع وأعد المحاولة",
         "restore_free_limit": "النسخة المجانية: هذه النسخة تحتوي {c} سيارة و{cl} زبون و{ct} عقد (الحد {lim}). فعّل النسخة الكاملة للاسترداد",
         "invalid_file_type": "الرجاء اختيار ملف PDF أو صورة",
         "pypdf_missing": "أضف pypdf لدمج PDF",
@@ -881,7 +880,6 @@ TRANSLATIONS = {
         "pdf_regenerated": "PDF regenere",
         "confirm_restore_msg": "Remplacer toutes les donnees?",
         "invalid_backup": "Sauvegarde invalide",
-        "allow_files_msg": "Activez « Acces a tous les fichiers » puis revenez et reessayez",
         "restore_free_limit": "Version gratuite : cette sauvegarde contient {c} vehicules, {cl} clients, {ct} contrats (limite {lim}). Activez la version complete",
         "invalid_file_type": "Veuillez choisir un fichier PDF ou une image",
         "pypdf_missing": "Ajouter pypdf",
@@ -2365,7 +2363,7 @@ KV = '''
                 text_color: (1, 1, 1, 1) if root.active_lang == "fr" else (0.35, 0.42, 0.55, 1)
                 font_size: "22sp"
             MDLabel:
-                text: "Francais"
+                text: "Français"
                 font_name: app.font_file if app.font_file else "Roboto"
                 valign: "middle"
                 bold: True
@@ -4855,36 +4853,87 @@ class AutoManagerApp(MDApp):
             (self.tr("close"), "close-circle-outline", (0.45, 0.45, 0.5), lambda: self.contract_action_dialog.dismiss()),
         ], "contract_action_dialog")
 
-    def ensure_all_files_access(self):
-        """أندرويد 11+: بدون هذه الصلاحية لا تظهر ملفات PDF في المتصفح (تظهر الصور فقط).
-        تفتح شاشة الإعدادات مرة واحدة؛ يرجع True إذا كانت الصلاحية ممنوحة."""
-        if not IS_ANDROID:
-            return True
+    def pick_android_document(self, mimes, callback):
+        """منتقي ملفات النظام (SAF): يفتح أي PDF أو صورة مباشرة بدون صلاحية تخزين.
+        الملف المختار يُنسخ إلى مجلد التطبيق ثم يُمرَّر مساره إلى callback."""
+        from jnius import autoclass
+        from android import activity
+        Intent = autoclass('android.content.Intent')
+        act = autoclass('org.kivy.android.PythonActivity').mActivity
+        intent = Intent(Intent.ACTION_OPEN_DOCUMENT)
+        intent.addCategory(Intent.CATEGORY_OPENABLE)
+        intent.setType("*/*")
+        if mimes and mimes != ["*/*"]:
+            try:
+                intent.putExtra(Intent.EXTRA_MIME_TYPES, mimes)
+            except Exception as e:
+                print("EXTRA_MIME_TYPES error:", e)
+        code = 7391
+
+        def _on_result(request_code, result_code, data):
+            if request_code != code:
+                return
+            try:
+                activity.unbind(on_activity_result=_on_result)
+            except Exception:
+                pass
+            if result_code != -1 or data is None:
+                return
+            try:
+                path = self._copy_uri_to_private(data.getData())
+            except Exception as e:
+                print("copy picked file error:", e)
+                Clock.schedule_once(lambda dt: self.notify(self.tr("save_error")), 0)
+                return
+            Clock.schedule_once(lambda dt: callback(path), 0)
+
+        activity.bind(on_activity_result=_on_result)
+        act.startActivityForResult(intent, code)
+
+    def _copy_uri_to_private(self, uri):
+        import shutil
+        from jnius import autoclass
+        act = autoclass('org.kivy.android.PythonActivity').mActivity
+        cr = act.getContentResolver()
+        name = ""
         try:
-            from jnius import autoclass
-            if autoclass('android.os.Build$VERSION').SDK_INT < 30:
-                return True
-            if autoclass('android.os.Environment').isExternalStorageManager():
-                return True
-            Intent = autoclass('android.content.Intent')
-            Settings = autoclass('android.provider.Settings')
-            Uri = autoclass('android.net.Uri')
-            act = autoclass('org.kivy.android.PythonActivity').mActivity
-            intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
-            intent.setData(Uri.parse("package:" + act.getPackageName()))
-            act.startActivity(intent)
-            self.notify(self.tr("allow_files_msg"))
-            return False
-        except Exception as e:
-            print("all-files access error:", e)
-            return True
+            cur = cr.query(uri, None, None, None, None)
+            if cur is not None:
+                try:
+                    if cur.moveToFirst():
+                        i = cur.getColumnIndex("_display_name")
+                        if i >= 0:
+                            name = cur.getString(i) or ""
+                finally:
+                    cur.close()
+        except Exception:
+            pass
+        name = re.sub(r'[\\/:*?"<>|]', "_", name).strip() or "picked"
+        if "." not in name:
+            mime = (cr.getType(uri) or "").lower()
+            name += (".pdf" if "pdf" in mime else ".jpg" if "jp" in mime
+                     else ".png" if "png" in mime else "")
+        d = os.path.join(private_dir(), "picked")
+        os.makedirs(d, exist_ok=True)
+        dst = os.path.join(d, name)
+        pfd = cr.openFileDescriptor(uri, "r")
+        fd = pfd.detachFd()
+        with os.fdopen(fd, "rb") as src, open(dst, "wb") as out:
+            shutil.copyfileobj(src, out)
+        return dst
 
     def open_file_manager(self, mode, ext, hint, start_dir=None):
         self.fm_mode = mode
-        if mode in ("order", "restore") and not self.ensure_all_files_access():
-            return
         self.allowed_exts = ext
         from kivy.utils import platform
+        if platform == "android" and mode in ("order", "restore"):
+            mimes = ["application/pdf", "image/*"] if mode == "order" else ["*/*"]
+            try:
+                self.notify(hint)
+                self.pick_android_document(mimes, self.on_doc_selected)
+                return
+            except Exception as e:
+                print("SAF picker error:", e)
         if start_dir is None:
             start_dir = os.path.expanduser("~")
             if platform == "android":
