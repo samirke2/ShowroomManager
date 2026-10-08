@@ -671,6 +671,11 @@ TRANSLATIONS = {
         "pdf_regenerated": "تم إعادة توليد ملف PDF",
         "confirm_restore_msg": "سيتم استبدال كل البيانات الحالية. متابعة؟",
         "invalid_backup": "الملف ليس نسخة صالحة",
+        "free_locked_msg": "التعديل والحذف متاحان في النسخة الكاملة",
+        "restore_free_limit": "النسخة المجانية: هذه النسخة تحتوي {c} سيارة و{cl} زبون و{ct} عقد (الحد {lim}). فعّل النسخة الكاملة للاسترداد",
+        "msg_app_active": "التطبيق مفعّل",
+        "msg_already_active": "التطبيق مفعّل بالفعل",
+        "msg_enter_code": "الرجاء إدخال كلمة السر",
         "pypdf_missing": "أضف pypdf لدمج PDF",
         "pick_backup_file": "اختر ملف النسخة الاحتياطية (.db)",
         "search_cars_hint": "ابحث بالاسم، التسجيل...",
@@ -822,6 +827,11 @@ TRANSLATIONS = {
         "pdf_regenerated": "PDF regenere",
         "confirm_restore_msg": "Remplacer toutes les donnees?",
         "invalid_backup": "Sauvegarde invalide",
+        "free_locked_msg": "Modification et suppression : version complete uniquement",
+        "restore_free_limit": "Version gratuite : cette sauvegarde contient {c} vehicules, {cl} clients, {ct} contrats (limite {lim}). Activez la version complete",
+        "msg_app_active": "Application active",
+        "msg_already_active": "Application deja active",
+        "msg_enter_code": "Entrez le code",
         "pypdf_missing": "Ajouter pypdf",
         "pick_backup_file": "Choisir sauvegarde (.db)",
         "search_cars_hint": "Chercher...",
@@ -2939,8 +2949,7 @@ class AutoManagerApp(MDApp):
     def on_banner_btn_click(self, *args):
         try:
             if self.is_premium():
-                self.notify(self.ar("التطبيق مفعّل") if self.current_lang == "ar"
-                            else "Application active")
+                self.notify(self.tr("msg_app_active"))
             else:
                 self.show_upgrade_dialog("")
         except Exception as e:
@@ -2983,9 +2992,7 @@ class AutoManagerApp(MDApp):
         except Exception:
             return False
         if not silent:
-            self.notify(self.ar("التعديل والحذف متاحان في النسخة الكاملة")
-                        if self.current_lang == "ar"
-                        else "Modification et suppression : version complete uniquement")
+            self.notify(self.tr("free_locked_msg"))
         return True
 
     def notify(self, text):
@@ -3153,8 +3160,7 @@ class AutoManagerApp(MDApp):
                 return
             entered = (pin_field.text or "").strip()
             if not entered:
-                self.notify(self.ar("الرجاء إدخال كلمة السر") if L == "ar"
-                            else "Entrez le code")
+                self.notify(self.tr("msg_enter_code"))
                 return
             if hash_pin(entered) == get_pin_hash():
                 reset_fail_counter()
@@ -3798,8 +3804,7 @@ class AutoManagerApp(MDApp):
     # ========== الترقية ==========
     def show_upgrade_dialog(self, reason=""):
         if self.is_premium():
-            self.notify(self.ar("التطبيق مفعّل بالفعل") if self.current_lang == "ar"
-                        else "Application deja active")
+            self.notify(self.tr("msg_already_active"))
             return
         L = self.current_lang
         device_id = get_device_id()
@@ -5149,15 +5154,8 @@ class AutoManagerApp(MDApp):
                 bc.close()
                 if (n_cars > FREE_LIMIT_CARS or n_cl > FREE_LIMIT_CLIENTS
                         or n_ct > FREE_LIMIT_CONTRACTS):
-                    if self.current_lang == "ar":
-                        self.notify(self.ar(
-                            f"النسخة المجانية: هذه النسخة تحتوي {n_cars} سيارة و{n_cl} زبون "
-                            f"و{n_ct} عقد (الحد {FREE_LIMIT_CARS}). فعّل النسخة الكاملة للاسترداد"))
-                    else:
-                        self.notify(
-                            f"Version gratuite : cette sauvegarde contient {n_cars} vehicules, "
-                            f"{n_cl} clients, {n_ct} contrats (limite {FREE_LIMIT_CARS}). "
-                            f"Activez la version complete")
+                    self.notify(self.tr("restore_free_limit").format(
+                        c=n_cars, cl=n_cl, ct=n_ct, lim=FREE_LIMIT_CARS))
                     return
             old_license = self.get_setting("license_key")
             self.backup_db("before_restore")
