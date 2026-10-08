@@ -1,5 +1,5 @@
 [app]
-title = Samir Pyth_DZ
+title = ShowroomManager
 package.name = samirpythdz
 package.domain = org.samir
 source.dir = .
