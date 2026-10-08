@@ -3974,7 +3974,7 @@ class AutoManagerApp(MDApp):
             on_release=on_activate))
 
         self.upgrade_dialog = self.dlg(
-            title=self.trd("upgrade_title"),
+            title=self.trd(""),
             type="custom",
             content_cls=self.wrap_dialog(box),
             buttons=[MDFlatButton(text=self.trd("close"),
