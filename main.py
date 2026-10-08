@@ -2378,7 +2378,8 @@ MDScreen:
                     text_size: self.width, None
 
         MDBottomNavigation:
-            height: dp(92)
+            size_hint_y: None
+            height: dp(105)
             panel_color: 1, 1, 1, 1
             
             selected_color_background: 0.08, 0.45, 0.75, 0.12
@@ -3086,7 +3087,7 @@ class AutoManagerApp(MDApp):
         self.theme_cls.theme_style = "Light"
         self.theme_cls.primary_palette = "Blue"
         try:
-            self.theme_cls.font_styles["Button"] = ["Roboto", 9, False, "Button"]
+            self.theme_cls.font_styles["Button"] = ["Roboto", 8, False, "Button"]
         except Exception:
             pass
         try:
@@ -4883,21 +4884,7 @@ class AutoManagerApp(MDApp):
             self.show_bank_readonly_dialog()
             return
         L = self.current_lang
-        box = MDBoxLayout(orientation="vertical", size_hint_y=None,
-                          spacing=dp(14), padding=[dp(14), dp(24), dp(14), dp(24)],
-                          adaptive_height=True)
-        fields = []
-        for key in ("bank_holder", "bank_name", "bank_agency", "bank_account"):
-            lbl = MDLabel(text=self.trd(key), bold=True,
-                          size_hint_y=None, height=dp(18), font_size="13sp",
-                          halign="right" if L == "ar" else "left",
-                          theme_text_color="Custom",
-                          text_color=(0.08, 0.45, 0.75, 1))
-            box.add_widget(lbl)
-            tf = ArabicField(mode="rectangle", font_size="15sp", size_hint_y=None, height=dp(46))
-            set_field_val(tf, self.get_setting(key))
-            box.add_widget(tf)
-            fields.append((key, tf))
+show_bank_info_dialog
 
         def save(_=None):
             conn = sqlite3.connect(get_db_path())
@@ -5121,7 +5108,7 @@ class AutoManagerApp(MDApp):
 
     def start_restore(self):
         start_dir = db_dir()
-        self.open_file_manager("restore", [".db", ".sqlite"], self.tr("pick_backup_file"), start_dir)
+        self.open_file_manager("restore", [], self.tr("pick_backup_file"), start_dir)
 
     def confirm_restore(self, path):
         self.restore_dialog = self.dlg(
