@@ -1753,6 +1753,7 @@ def set_field_val(field, value):
 #  KV (تم تعديل محاذاة العنوان إلى المنتصف)
 # =====================================================================
 KV = '''
+#:import NoTransition kivy.uix.screenmanager.NoTransition
 <FormField@ArabicField>:
     mode: "rectangle"
     size_hint_y: None
@@ -1832,12 +1833,35 @@ KV = '''
         halign: "right" if app.current_lang == "ar" else "left"
         valign: "middle"
         text_size: self.width, None
-        shorten: True
-        shorten_from: "left" if app.current_lang == "ar" else "right"
         theme_text_color: "Custom"
         text_color: 1, 1, 1, 1
         bold: True
-        font_size: "18sp"
+        font_size: "17sp"
+
+<NavTab>:
+    orientation: "vertical"
+    padding: "4dp", "6dp", "4dp", "4dp"
+    spacing: "2dp"
+    radius: [0]
+    elevation: 0
+    ripple_behavior: True
+    md_bg_color: 1, 1, 1, 1
+    MDIcon:
+        icon: root.icon
+        halign: "center"
+        size_hint_y: None
+        height: "30dp"
+        font_size: "24sp"
+        theme_text_color: "Custom"
+        text_color: root.color
+    MDLabel:
+        text: root.text
+        halign: "center"
+        valign: "middle"
+        font_size: "12sp"
+        bold: True
+        theme_text_color: "Custom"
+        text_color: root.color
 
 <CarDialogContent>:
     orientation: "vertical"
@@ -2383,16 +2407,12 @@ MDScreen:
                     valign: "middle"
                     text_size: self.width, None
 
-        MDBottomNavigation:
-            panel_color: 1, 1, 1, 1
-            selected_color_background: 0.08, 0.45, 0.75, 0.12
-            text_color_active: 0.08, 0.45, 0.75, 1
-            text_color_normal: 0.55, 0.55, 0.6, 1
+        ScreenManager:
+            id: nav_sm
+            transition: NoTransition()
 
-            MDBottomNavigationItem:
+            MDScreen:
                 name: "cars_tab"
-                text: app.trd("tab_cars", app.current_lang)
-                icon: "car-side"
                 MDFloatLayout:
                     MDBoxLayout:
                         orientation: "vertical"
@@ -2434,10 +2454,8 @@ MDScreen:
                         md_bg_color: 0.55, 0.27, 0.68, 1
                         on_release: app.show_stats()
 
-            MDBottomNavigationItem:
+            MDScreen:
                 name: "clients_tab"
-                text: app.trd("tab_clients", app.current_lang)
-                icon: "account-group"
                 MDFloatLayout:
                     MDBoxLayout:
                         orientation: "vertical"
@@ -2458,10 +2476,8 @@ MDScreen:
                         md_bg_color: 0.08, 0.45, 0.75, 1
                         on_release: app.show_add_client_dialog()
 
-            MDBottomNavigationItem:
+            MDScreen:
                 name: "sales_tab"
-                text: app.trd("tab_contracts", app.current_lang)
-                icon: "file-document-outline"
                 MDFloatLayout:
                     MDBoxLayout:
                         orientation: "vertical"
@@ -2482,10 +2498,8 @@ MDScreen:
                         md_bg_color: 0.08, 0.45, 0.75, 1
                         on_release: app.show_add_contract_dialog()
 
-            MDBottomNavigationItem:
+            MDScreen:
                 name: "settings_tab"
-                text: app.trd("tab_settings", app.current_lang)
-                icon: "cog"
                 ScrollView:
                     MDBoxLayout:
                         orientation: "vertical"
@@ -2757,6 +2771,37 @@ MDScreen:
                                 halign: "center"
                                 font_size: "12sp"
                                 theme_text_color: "Secondary"
+
+        MDBoxLayout:
+            size_hint_y: None
+            height: "64dp"
+            md_bg_color: 1, 1, 1, 1
+            canvas.before:
+                Color:
+                    rgba: 0.86, 0.88, 0.92, 1
+                Rectangle:
+                    pos: self.x, self.top - 1
+                    size: self.width, 1
+            NavTab:
+                icon: "car-side"
+                text: app.trd("tab_cars", app.current_lang)
+                color: (0.08, 0.45, 0.75, 1) if nav_sm.current == "cars_tab" else (0.55, 0.55, 0.6, 1)
+                on_release: nav_sm.current = "cars_tab"
+            NavTab:
+                icon: "account-group"
+                text: app.trd("tab_clients", app.current_lang)
+                color: (0.08, 0.45, 0.75, 1) if nav_sm.current == "clients_tab" else (0.55, 0.55, 0.6, 1)
+                on_release: nav_sm.current = "clients_tab"
+            NavTab:
+                icon: "file-document-outline"
+                text: app.trd("tab_contracts", app.current_lang)
+                color: (0.08, 0.45, 0.75, 1) if nav_sm.current == "sales_tab" else (0.55, 0.55, 0.6, 1)
+                on_release: nav_sm.current = "sales_tab"
+            NavTab:
+                icon: "cog"
+                text: app.trd("tab_settings", app.current_lang)
+                color: (0.08, 0.45, 0.75, 1) if nav_sm.current == "settings_tab" else (0.55, 0.55, 0.6, 1)
+                on_release: nav_sm.current = "settings_tab"
 '''
 # =====================================================================
 #  الأصناف
@@ -2818,6 +2863,12 @@ class ClientCard(MDCard):
     client_id = NumericProperty()
     title = StringProperty()
     subtitle = StringProperty()
+
+
+class NavTab(MDCard):
+    icon = StringProperty()
+    text = StringProperty()
+    color = ListProperty([0.55, 0.55, 0.6, 1])
 
 
 class ActionTile(MDCard):
@@ -3598,15 +3649,6 @@ class AutoManagerApp(MDApp):
                                     padding=[dp(8), dp(8), dp(8), dp(8)],
                                     adaptive_height=True)
 
-            info = MDLabel(
-                text=_txt(TXT_VARIABLES),
-                size_hint_y=None, font_size="11sp",
-                halign="right" if L == "ar" else "left",
-                valign="middle",
-                theme_text_color="Custom", text_color=(0.5, 0.5, 0.55, 1))
-            info.bind(width=lambda i, w: setattr(i, "text_size", (w, None)))
-            info.bind(texture_size=lambda i, ts: setattr(i, "height", ts[1] + 10))
-            container.add_widget(info)
 
             articles_box = MDBoxLayout(orientation="vertical", size_hint_y=None,
                                        spacing=dp(10), adaptive_height=True)
@@ -5180,12 +5222,70 @@ class AutoManagerApp(MDApp):
         found.sort(reverse=True)
         return found
 
+    def _browse_backup(self, browse_dir):
+        from kivy.utils import platform
+        if platform == "android" and self._android_pick_backup():
+            return
+        self.open_file_manager("restore", [], self.tr("pick_backup_file"), browse_dir)
+
+    def _copy_uri_to_file(self, uri, dest):
+        from jnius import autoclass
+        PythonActivity = autoclass('org.kivy.android.PythonActivity')
+        resolver = PythonActivity.mActivity.getContentResolver()
+        ins = resolver.openInputStream(uri)
+        outs = autoclass('java.io.FileOutputStream')(dest)
+        try:
+            try:
+                Channels = autoclass('java.nio.channels.Channels')
+                outs.getChannel().transferFrom(Channels.newChannel(ins), 0, 1 << 40)
+            except Exception:
+                autoclass('android.os.FileUtils').copy(ins, outs)
+        finally:
+            try: outs.close()
+            except Exception: pass
+            try: ins.close()
+            except Exception: pass
+
+    def _android_pick_backup(self):
+        try:
+            from jnius import autoclass
+            from android import activity
+            PythonActivity = autoclass('org.kivy.android.PythonActivity')
+            Intent = autoclass('android.content.Intent')
+            intent = Intent(Intent.ACTION_OPEN_DOCUMENT)
+            intent.addCategory(Intent.CATEGORY_OPENABLE)
+            intent.setType("*/*")
+            REQ = 7421
+
+            def on_result(request_code, result_code, data):
+                if request_code != REQ:
+                    return
+                try: activity.unbind(on_activity_result=on_result)
+                except Exception: pass
+                if result_code != -1 or data is None:
+                    return
+                try:
+                    dest = os.path.join(private_dir(), "restore_tmp.db")
+                    self._copy_uri_to_file(data.getData(), dest)
+                except Exception as e:
+                    print("pick backup error:", e)
+                    Clock.schedule_once(lambda dt: self.notify(self.tr("save_error")))
+                    return
+                Clock.schedule_once(lambda dt: self.confirm_restore(dest))
+
+            activity.bind(on_activity_result=on_result)
+            PythonActivity.mActivity.startActivityForResult(intent, REQ)
+            return True
+        except Exception as e:
+            print("android picker unavailable:", e)
+            return False
+
     def start_restore(self):
         from kivy.utils import platform
         browse_dir = "/storage/emulated/0" if platform == "android" else os.path.expanduser("~")
         files = self._find_backup_files()
         if not files:
-            self.open_file_manager("restore", [], self.tr("pick_backup_file"), browse_dir)
+            self._browse_backup(browse_dir)
             return
         L = self.current_lang
         box = MDBoxLayout(orientation="vertical", size_hint_y=None,
@@ -5199,21 +5299,29 @@ class AutoManagerApp(MDApp):
 
         for mt, size, p in files[:40]:
             when = datetime.datetime.fromtimestamp(mt).strftime("%Y-%m-%d %H:%M")
-            btn = MDFlatButton(
-                text=f"{os.path.basename(p)}\n{when}  -  {size // 1024} KB",
-                size_hint_x=1, size_hint_y=None, height=dp(56),
-                theme_text_color="Custom", text_color=(0.1, 0.15, 0.25, 1),
-                md_bg_color=(0.93, 0.96, 1, 1),
-                on_release=lambda x, p=p: pick(p))
-            box.add_widget(btn)
+            card = MDCard(orientation="vertical", size_hint_y=None, height=dp(62),
+                          padding=[dp(12), dp(6), dp(12), dp(6)], radius=[12],
+                          elevation=0, ripple_behavior=True,
+                          md_bg_color=(0.93, 0.96, 1, 1),
+                          on_release=lambda x, p=p: pick(p))
+            n_lbl = MDLabel(text=os.path.basename(p), font_size="13sp", bold=True,
+                            halign="left", valign="middle", shorten=True,
+                            shorten_from="center")
+            n_lbl.bind(width=lambda i, w: setattr(i, "text_size", (w, None)))
+            d_lbl = MDLabel(text=f"{when}  -  {max(1, size // 1024)} KB", font_size="12sp",
+                            halign="left", valign="middle",
+                            theme_text_color="Secondary")
+            card.add_widget(n_lbl)
+            card.add_widget(d_lbl)
+            box.add_widget(card)
 
         def browse(_=None):
             self.restore_list_dialog.dismiss()
-            self.open_file_manager("restore", [], self.tr("pick_backup_file"), browse_dir)
+            self._browse_backup(browse_dir)
 
         self.restore_list_dialog = self.dlg(
             title="", type="custom",
-            content_cls=self.wrap_dialog(box, min_height=dp(420)),
+            content_cls=self.wrap_dialog(box, min_height=dp(300)),
             buttons=[MDFlatButton(text=self.trd("cancel"),
                                   on_release=lambda x: self.restore_list_dialog.dismiss()),
                      MDRaisedButton(text="Parcourir" if L == "fr" else self.ar("استعراض الملفات"),
