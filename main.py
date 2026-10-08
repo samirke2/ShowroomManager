@@ -671,7 +671,6 @@ TRANSLATIONS = {
         "pdf_regenerated": "تم إعادة توليد ملف PDF",
         "confirm_restore_msg": "سيتم استبدال كل البيانات الحالية. متابعة؟",
         "invalid_backup": "الملف ليس نسخة صالحة",
-        "invalid_file_type": "الرجاء اختيار ملف PDF أو صورة",
         "pypdf_missing": "أضف pypdf لدمج PDF",
         "pick_backup_file": "اختر ملف النسخة الاحتياطية (.db)",
         "search_cars_hint": "ابحث بالاسم، التسجيل...",
@@ -823,7 +822,6 @@ TRANSLATIONS = {
         "pdf_regenerated": "PDF regenere",
         "confirm_restore_msg": "Remplacer toutes les donnees?",
         "invalid_backup": "Sauvegarde invalide",
-        "invalid_file_type": "Veuillez choisir un fichier PDF ou une image",
         "pypdf_missing": "Ajouter pypdf",
         "pick_backup_file": "Choisir sauvegarde (.db)",
         "search_cars_hint": "Chercher...",
@@ -2135,6 +2133,9 @@ KV = '''
         theme_text_color: "Custom"
         text_color: 0.16, 0.5, 0.73, 1
 
+<MDBottomNavigationHeader>:
+    padding: 0, "6dp", 0, "6dp"
+
 <ActionTile>:
     orientation: "vertical"
     size_hint_y: None
@@ -2318,6 +2319,7 @@ MDScreen:
                     text_size: self.width, None
 
         MDBottomNavigation:
+            id: main_nav
             panel_color: 1, 1, 1, 1
             selected_color_background: 0.08, 0.45, 0.75, 0.12
             text_color_active: 0.08, 0.45, 0.75, 1
@@ -3016,13 +3018,9 @@ class AutoManagerApp(MDApp):
         self.notify(self.tr("lang_changed"))
 
     def build(self):
-        from kivy.core.window import Window
-        Window.clearcolor = (0.95, 0.96, 0.98, 1)
         request_android_permissions()
         self.theme_cls.theme_style = "Light"
         self.theme_cls.primary_palette = "Blue"
-        # حل مشكلة تداخل النصوص والأيقونات في الشريط السفلي
-        self.theme_cls.font_styles["Button"] = ["Roboto", 11, False, "Button"]
         try:
             init_db()
         except Exception as e:
@@ -3052,11 +3050,22 @@ class AutoManagerApp(MDApp):
             else:
                 Clock.schedule_once(lambda dt: self.check_welcome(), 1.0)
 
+            Clock.schedule_once(self.fix_bottom_nav, 0.3)
             Clock.schedule_once(lambda dt: self.auto_backup(), 5)
             Clock.schedule_once(lambda dt: self.cleanup_old_backups(), 6)
         except Exception as e:
             print("on_start error:", e)
             traceback.print_exc()
+
+    def fix_bottom_nav(self, *args):
+        try:
+            nav = self.root.ids.main_nav
+            h = dp(80)
+            nav.height = h
+            nav.ids.bottom_panel.height = h
+            nav.ids.tab_bar.height = h
+        except Exception as e:
+            print("fix_bottom_nav error:", e)
 
     def refresh_app_logo(self):
         try:
@@ -4729,10 +4738,86 @@ class AutoManagerApp(MDApp):
             (self.tr("close"), "close-circle-outline", (0.45, 0.45, 0.5), lambda: self.contract_action_dialog.dismiss()),
         ], "contract_action_dialog")
 
+    def pick_android_document(self, mimes, callback):
+        """Android Storage Access Framework: يعرض كل الملفات (PDF وصور وغيرها)
+        بدون صلاحية تخزين كاملة؛ الملف المختار يُنسخ إلى مجلد التطبيق."""
+        from jnius import autoclass
+        from android import activity
+        Intent = autoclass('android.content.Intent')
+        act = autoclass('org.kivy.android.PythonActivity').mActivity
+        intent = Intent(Intent.ACTION_OPEN_DOCUMENT)
+        intent.addCategory(Intent.CATEGORY_OPENABLE)
+        intent.setType("*/*")
+        if mimes and mimes != ["*/*"]:
+            try:
+                intent.putExtra(Intent.EXTRA_MIME_TYPES, mimes)
+            except Exception as e:
+                print("EXTRA_MIME_TYPES error:", e)
+        code = 7391
+
+        def _on_result(request_code, result_code, data):
+            if request_code != code:
+                return
+            try:
+                activity.unbind(on_activity_result=_on_result)
+            except Exception:
+                pass
+            if result_code != -1 or data is None:
+                return
+            try:
+                path = self._copy_uri_to_private(data.getData())
+            except Exception as e:
+                print("copy picked file error:", e)
+                Clock.schedule_once(lambda dt: self.notify(self.tr("save_error")), 0)
+                return
+            Clock.schedule_once(lambda dt: callback(path), 0)
+
+        activity.bind(on_activity_result=_on_result)
+        act.startActivityForResult(intent, code)
+
+    def _copy_uri_to_private(self, uri):
+        import shutil
+        from jnius import autoclass
+        act = autoclass('org.kivy.android.PythonActivity').mActivity
+        cr = act.getContentResolver()
+        name = ""
+        try:
+            cur = cr.query(uri, None, None, None, None)
+            if cur is not None:
+                try:
+                    if cur.moveToFirst():
+                        i = cur.getColumnIndex("_display_name")
+                        if i >= 0:
+                            name = cur.getString(i) or ""
+                finally:
+                    cur.close()
+        except Exception:
+            pass
+        name = re.sub(r'[\\/:*?"<>|]', "_", name).strip() or "picked"
+        if "." not in name:
+            mime = (cr.getType(uri) or "").lower()
+            name += (".pdf" if "pdf" in mime else ".jpg" if "jp" in mime
+                     else ".png" if "png" in mime else "")
+        d = os.path.join(private_dir(), "picked")
+        os.makedirs(d, exist_ok=True)
+        dst = os.path.join(d, name)
+        pfd = cr.openFileDescriptor(uri, "r")
+        fd = pfd.detachFd()
+        with os.fdopen(fd, "rb") as src, open(dst, "wb") as out:
+            shutil.copyfileobj(src, out)
+        return dst
+
     def open_file_manager(self, mode, ext, hint):
         self.fm_mode = mode
-        self.allowed_exts = ext
         from kivy.utils import platform
+        if platform == "android":
+            mimes = ["application/pdf", "image/*"] if mode == "order" else ["*/*"]
+            try:
+                self.notify(hint)
+                self.pick_android_document(mimes, self.on_doc_selected)
+                return
+            except Exception as e:
+                print("SAF picker error:", e)
         start = os.path.expanduser("~")
         if platform == "android":
             start = "/storage/emulated/0"
@@ -4740,7 +4825,7 @@ class AutoManagerApp(MDApp):
         self.file_manager = MDFileManager(
             exit_manager=self.close_file_manager,
             select_path=self.on_doc_selected,
-            ext=ext if ext else [],  # عرض جميع الملفات إذا كان ext فارغاً
+            ext=ext,
         )
         self.notify(hint)
         self.file_manager.show(start)
@@ -4748,8 +4833,8 @@ class AutoManagerApp(MDApp):
     def start_order_receipt(self):
         self.contract_action_dialog.dismiss()
         self.order_contract_id = self.current_contract_id
-        # تمرير None لعرض جميع الملفات، ثم نقوم بالتحقق يدوياً في on_doc_selected
-        self.open_file_manager("order", None, self.tr("pick_id_file"))
+        self.open_file_manager("order", [".pdf", ".PDF", ".jpg", ".JPG", ".jpeg", ".JPEG", ".png", ".PNG"],
+                               self.tr("pick_id_file"))
 
     def close_file_manager(self, *args):
         try: self.file_manager.close()
@@ -4760,21 +4845,8 @@ class AutoManagerApp(MDApp):
             return
         self.close_file_manager()
         if getattr(self, "fm_mode", "") == "restore":
-            if not path.lower().endswith((".db", ".sqlite")):
-                self.notify(self.tr("invalid_file_type"))
-                return
             self.confirm_restore(path)
             return
-        
-        # التحقق من نوع الملف يدوياً لوضع وصل الطلب
-        if getattr(self, "fm_mode", "") == "order":
-            allowed = getattr(self, "allowed_exts", [".pdf", ".jpg", ".jpeg", ".png"])
-            if allowed:
-                ext = os.path.splitext(path)[1].lower()
-                if ext not in [e.lower() for e in allowed]:
-                    self.notify(self.tr("invalid_file_type"))
-                    return
-
         try:
             self.generate_order_pdf(self.order_contract_id, path)
             self.notify(self.tr("order_pdf_success"))
