@@ -1579,46 +1579,108 @@ def doc_folder(doc_type, lang):
 # =====================================================================
 #  الترخيص
 # =====================================================================
-def get_device_id():
-    # 1. أولاً نحاول قراءة المعرّف المخزّن (للتوافق مع المستخدمين الحاليين)
+def _hardware_fingerprint():
+    """بصمة عتادية لا يمكن نقلها مع الملفات (فريدة لكل جهاز)."""
+    if _kivy_platform != "android":
+        return ""
     try:
-        conn = sqlite3.connect(get_db_path())
-        row = conn.execute("SELECT value FROM settings WHERE key='device_id'").fetchone()
-        conn.close()
-        if row and row[0] and row[0] != "UNKNOWN":
-            return row[0]
-    except Exception:
-        pass
-
-    # 2. إذا لم يوجد، نستخدم ANDROID_ID الثابت
-    device_id = None
-    if _kivy_platform == "android":
+        from jnius import autoclass
+        Build = autoclass('android.os.Build')
+        parts = []
         try:
-            from jnius import autoclass
-            PythonActivity = autoclass('org.kivy.android.PythonActivity')
-            Settings = autoclass('android.provider.Settings')
-            Secure = autoclass('android.provider.Settings$Secure')
-            resolver = PythonActivity.mActivity.getContentResolver()
-            aid = Secure.getString(resolver, Settings.Secure.ANDROID_ID)
-            if aid and aid != "9774d56d682e549c":
-                device_id = aid.upper()
-        except Exception as e:
-            print("ANDROID_ID error:", e)
+            if Build.FINGERPRINT: parts.append(str(Build.FINGERPRINT))
+        except Exception: pass
+        try:
+            if Build.MANUFACTURER: parts.append(str(Build.MANUFACTURER))
+        except Exception: pass
+        try:
+            if Build.MODEL: parts.append(str(Build.MODEL))
+        except Exception: pass
+        try:
+            if Build.BOARD: parts.append(str(Build.BOARD))
+        except Exception: pass
+        try:
+            if Build.HARDWARE: parts.append(str(Build.HARDWARE))
+        except Exception: pass
+        try:
+            if Build.DEVICE: parts.append(str(Build.DEVICE))
+        except Exception: pass
+        if parts:
+            raw = "|".join(parts)
+            return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16].upper()
+    except Exception as e:
+        print("hardware fingerprint error:", e)
+    return ""
 
-    # 3. احتياطي: UUID عشوائي (في حالة فشل كل شيء)
-    if not device_id:
-        device_id = uuid.uuid4().hex[:16].upper()
 
-    # 4. تخزين المعرّف للاستخدام المستقبلي
+def get_device_id():
+    persistent_file = os.path.join(app_root(), ".device_id")
+    stored_id = ""
+    
+    # 1. قراءة المعرّف المخزّن
+    try:
+        if os.path.isfile(persistent_file):
+            with open(persistent_file, "r", encoding="utf-8") as f:
+                stored_id = f.read().strip()
+    except Exception as e:
+        print("read persistent error:", e)
+
+    # 2. إذا لم يوجد في الملف، حاول من قاعدة البيانات
+    if not stored_id:
+        try:
+            conn = sqlite3.connect(get_db_path())
+            row = conn.execute("SELECT value FROM settings WHERE key='device_id'").fetchone()
+            conn.close()
+            if row and row[0] and row[0] != "UNKNOWN":
+                stored_id = row[0]
+        except Exception:
+            pass
+
+    # 3. إذا وجدنا معرّفاً سابقاً، تحقق من بصمة الجهاز
+    hw_fp = _hardware_fingerprint()
+    
+    if stored_id:
+        # إذا وُجدت بصمة عتادية، نتحقق من تطابقها
+        try:
+            conn = sqlite3.connect(get_db_path())
+            row = conn.execute("SELECT value FROM settings WHERE key='hw_fingerprint'").fetchone()
+            old_fp = row[0] if row and row[0] else ""
+            conn.close()
+            
+            # ⚠️ إذا كانت البصمة القديمة موجودة ومختلفة عن الحالية → الجهاز تغيّر!
+            if old_fp and hw_fp and old_fp != hw_fp:
+                print("⚠️ Device changed! Generating new ID.")
+                # نحذف التفعيل ونعيد توليد معرّف جديد
+                stored_id = ""
+        except Exception:
+            pass
+
+    # 4. إذا لم يوجد معرّف، نولّد واحداً جديداً
+    if not stored_id:
+        if hw_fp:
+            # ندمج البصمة العتادية مع عشوائي لضمان التفرد
+            stored_id = hashlib.sha256((hw_fp + secrets.token_hex(8)).encode("utf-8")).hexdigest()[:16].upper()
+        else:
+            stored_id = uuid.uuid4().hex[:16].upper()
+
+    # 5. الحفظ
+    try:
+        with open(persistent_file, "w", encoding="utf-8") as f:
+            f.write(stored_id)
+    except Exception as e:
+        print("write persistent error:", e)
+
     try:
         conn = sqlite3.connect(get_db_path())
-        conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('device_id', ?)", (device_id,))
+        conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('device_id', ?)", (stored_id,))
+        if hw_fp:
+            conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('hw_fingerprint', ?)", (hw_fp,))
         conn.commit()
         conn.close()
     except Exception:
         pass
 
-    return device_id
+    return stored_id
 
 
 def check_activation(device_id, code):
