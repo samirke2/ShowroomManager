@@ -2378,10 +2378,7 @@ MDScreen:
                     text_size: self.width, None
 
         MDBottomNavigation:
-            size_hint_y: None
-            height: dp(105)
             panel_color: 1, 1, 1, 1
-            
             selected_color_background: 0.08, 0.45, 0.75, 0.12
             text_color_active: 0.08, 0.45, 0.75, 1
             text_color_normal: 0.55, 0.55, 0.6, 1
