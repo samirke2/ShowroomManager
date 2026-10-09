@@ -120,7 +120,7 @@ def _find_font():
 
 FONT_FILE = _find_font()
 LOGO_FILE = "logo.png"
-APP_VERSION = "1.1.35"
+APP_VERSION = "1.1.36"
 
 FREE_LIMIT_CARS = 3
 FREE_LIMIT_CLIENTS = 3
@@ -136,7 +136,8 @@ TjOLoDeRUzZXzw0cbgk80BbmlyhBXA8stE5WbYzOWPApoYiaQ5r1g/C6rxQ/9pMz
 QCFrAok2fEVTZwJmnIqE2MBuVo9yRXwlV0S80NrVRVX/7gcWLQfvFAAKfI7RO2PA
 GaNAmwvg50JLu0l/pS8pFcJuljk3dM1RMqQmtjdBEu4AWbbgHZyeOASRczkkr6eO
 YQIDAQAB
------END PUBLIC KEY-----"""
+-----END PUBLIC KEY-----
+"""
 
 RECOVERY_SECRET = "SamirPythDZ_recovery_2025_v1"
 
@@ -449,60 +450,12 @@ def _external_dir():
     return None
 
 
-def _hardware_fingerprint():
-    """بصمة عتادية فريدة للجهاز (لا يمكن نقلها)."""
-    if _kivy_platform != "android":
-        return "DESKTOP"
-    try:
-        from jnius import autoclass
-        Build = autoclass('android.os.Build')
-        parts = []
-        for attr in ("FINGERPRINT", "MANUFACTURER", "MODEL", "BOARD", "HARDWARE", "DEVICE"):
-            try:
-                v = getattr(Build, attr)
-                if v:
-                    parts.append(str(v))
-            except Exception:
-                pass
-        if parts:
-            raw = "|".join(parts)
-            fp = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16].upper()
-            print("✓ Hardware fingerprint:", fp)
-            return fp
-    except Exception as e:
-        print("hardware fingerprint error:", e)
-    return ""
-
-
 def _sign_fp(hw_fp):
     """توقيع البصمة بمفتاح HMAC سري."""
     import hmac
     if not hw_fp:
         return ""
     return hmac.new(_HMAC_SECRET, hw_fp.encode("utf-8"), hashlib.sha256).hexdigest()[:32].upper()
-
-
-def _verify_fp(hw_fp, signature):
-    """التحقق من توقيع البصمة."""
-    import hmac
-    if not hw_fp or not signature:
-        return False
-    return hmac.compare_digest(_sign_fp(hw_fp), signature.upper())
-
-
-def _wipe_external_activation():
-    """حذف جميع ملفات التفعيل من المجلد الخارجي."""
-    d = _external_dir()
-    if not d:
-        return
-    for f in (".device_id", ".license", ".hw_fp", ".hw_sig"):
-        try:
-            p = os.path.join(d, f)
-            if os.path.isfile(p):
-                os.remove(p)
-        except Exception:
-            pass
-    print("✓ External activation files wiped")
 
 
 def _save_activation(device_id, license_key="", hw_fp=None):
@@ -1712,178 +1665,166 @@ def doc_folder(doc_type, lang):
 # =====================================================================
 #  الترخيص
 # =====================================================================
+def _android_id():
+    """Return Android's app/device identifier when available; otherwise empty."""
+    if _kivy_platform != "android":
+        return ""
+    try:
+        from jnius import autoclass
+        PythonActivity = autoclass('org.kivy.android.PythonActivity')
+        SettingsSecure = autoclass('android.provider.Settings$Secure')
+        activity = PythonActivity.mActivity
+        value = SettingsSecure.getString(
+            activity.getContentResolver(), SettingsSecure.ANDROID_ID
+        )
+        return str(value).strip() if value else ""
+    except Exception as e:
+        print("Android ID unavailable:", e)
+        return ""
+
+
 def _hardware_fingerprint():
-    """بصمة عتادية لا يمكن نقلها مع الملفات (فريدة لكل جهاز)."""
+    """Current fingerprint: SHA256(ANDROID_ID|MANUFACTURER|MODEL)[:16]."""
     if _kivy_platform != "android":
         return ""
     try:
         from jnius import autoclass
         Build = autoclass('android.os.Build')
-        parts = []
-        try:
-            if Build.FINGERPRINT: parts.append(str(Build.FINGERPRINT))
-        except Exception: pass
-        try:
-            if Build.MANUFACTURER: parts.append(str(Build.MANUFACTURER))
-        except Exception: pass
-        try:
-            if Build.MODEL: parts.append(str(Build.MODEL))
-        except Exception: pass
-        try:
-            if Build.BOARD: parts.append(str(Build.BOARD))
-        except Exception: pass
-        try:
-            if Build.HARDWARE: parts.append(str(Build.HARDWARE))
-        except Exception: pass
-        try:
-            if Build.DEVICE: parts.append(str(Build.DEVICE))
-        except Exception: pass
-        if parts:
-            raw = "|".join(parts)
+        android_id = _android_id()
+        manufacturer = str(Build.MANUFACTURER or "").strip()
+        model = str(Build.MODEL or "").strip()
+        if android_id and manufacturer and model:
+            raw = "|".join((android_id, manufacturer, model))
             return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16].upper()
     except Exception as e:
         print("hardware fingerprint error:", e)
+    # Do not substitute an empty/partial fingerprint: that could invalidate a license.
     return ""
 
 
 def get_device_id():
-    # ⭐ قراءة الملف الخارجي
-    ext_did, ext_lic, ext_fp, ext_sig = _load_activation()
+    """Read the saved device ID without destructively deleting activation data.
+
+    A missing, unreadable, or changed fingerprint is not sufficient evidence of
+    tampering. The signed license is checked separately against this device's
+    current fingerprint.
+    """
+    ext_did, ext_lic, _ext_fp, _ext_sig = _load_activation()
 
     if ext_did:
-        current_fp = _hardware_fingerprint()
-
-        # ⭐ 1. التحقق من صحة توقيع البصمة (كشف العبث)
-        if ext_fp:
-            if not ext_sig or not _verify_fp(ext_fp, ext_sig):
-                print("🚨 TAMPERED .hw_fp detected! Signature invalid.")
-                _wipe_external_activation()
-                try:
-                    conn = sqlite3.connect(get_db_path())
-                    conn.execute("DELETE FROM settings WHERE key IN ('device_id','license_key')")
-                    conn.commit()
-                    conn.close()
-                except Exception:
-                    pass
-                new_id = uuid.uuid4().hex[:16].upper()
-                _save_activation(new_id)
-                try:
-                    conn = sqlite3.connect(get_db_path())
-                    conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('device_id', ?)", (new_id,))
-                    conn.commit()
-                    conn.close()
-                except Exception:
-                    pass
-                return new_id
-
-        # ⭐ 2. التحقق من تطابق البصمة (كشف النسخ لجهاز آخر)
-        if ext_fp and current_fp and ext_fp != current_fp:
-            print("⚠️ FINGERPRINT MISMATCH! Different device detected.")
-            _wipe_external_activation()
-            try:
-                conn = sqlite3.connect(get_db_path())
-                conn.execute("DELETE FROM settings WHERE key IN ('device_id','license_key')")
-                conn.commit()
-                conn.close()
-            except Exception:
-                pass
-            new_id = uuid.uuid4().hex[:16].upper()
-            _save_activation(new_id)
-            try:
-                conn = sqlite3.connect(get_db_path())
-                conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('device_id', ?)", (new_id,))
-                conn.commit()
-                conn.close()
-            except Exception:
-                pass
-            return new_id
-
-        # ⭐ 3. كل شيء سليم → مزامنة مع قاعدة البيانات
         try:
             conn = sqlite3.connect(get_db_path())
-            conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('device_id', ?)", (ext_did,))
+            conn.execute(
+                "INSERT OR REPLACE INTO settings (key, value) VALUES ('device_id', ?)",
+                (ext_did,)
+            )
             if ext_lic:
-                conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('license_key', ?)", (ext_lic,))
+                conn.execute(
+                    "INSERT OR REPLACE INTO settings (key, value) VALUES ('license_key', ?)",
+                    (ext_lic,)
+                )
             conn.commit()
             conn.close()
-        except Exception:
-            pass
+        except Exception as e:
+            print("Activation sync warning:", e)
         return ext_did
 
-    # لا يوجد ملف خارجي → نقرأ من قاعدة البيانات
+    # No external ID: recover the existing ID from the database first.
     try:
         conn = sqlite3.connect(get_db_path())
-        row = conn.execute("SELECT value FROM settings WHERE key='device_id'").fetchone()
+        row = conn.execute(
+            "SELECT value FROM settings WHERE key='device_id'"
+        ).fetchone()
         conn.close()
         if row and row[0] and row[0] != "UNKNOWN":
             _save_activation(row[0])
             return row[0]
-    except Exception:
-        pass
+    except Exception as e:
+        print("Device ID recovery warning:", e)
 
-    # توليد معرّف جديد
+    # Only generate a new ID when no prior ID can be recovered.
     did = uuid.uuid4().hex[:16].upper()
     _save_activation(did)
     try:
         conn = sqlite3.connect(get_db_path())
-        conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('device_id', ?)", (did,))
+        conn.execute(
+            "INSERT OR REPLACE INTO settings (key, value) VALUES ('device_id', ?)",
+            (did,)
+        )
         conn.commit()
         conn.close()
-    except Exception:
-        pass
+    except Exception as e:
+        print("Device ID save warning:", e)
     return did
 
 
+_ACTIVATION_CACHE_KEY = None
+_ACTIVATION_CACHE_VALID = False
+
+
 def check_activation(device_id, code, hw_fp=None):
+    """Verify a license signed for this device's current fingerprint only."""
+    global _ACTIVATION_CACHE_KEY, _ACTIVATION_CACHE_VALID
     if not code or not device_id:
         return False
     if "PLACEHOLDER" in PUBLIC_KEY_PEM:
         return False
     try:
-        from cryptography.hazmat.primitives import hashes, serialization
-        from cryptography.hazmat.primitives.asymmetric import padding
-        from cryptography.hazmat.backends import default_backend
-        public_key = serialization.load_pem_public_key(
-            PUBLIC_KEY_PEM.encode("utf-8"),
-            backend=default_backend()
-        )
+        current_fp = _hardware_fingerprint()
+        # Do not accept a caller-supplied/stale fingerprint instead of the
+        # fingerprint independently calculated by this installation.
+        if not current_fp:
+            return False
+        did = device_id.strip().upper()
+        normalized_fp = current_fp.strip().upper()
         cleaned = clean_text(code).replace(" ", "").replace("\n", "").replace("\r", "").replace("\t", "")
-        padding_needed = (-len(cleaned)) % 4
-        cleaned += "=" * padding_needed
+        cleaned += "=" * ((-len(cleaned)) % 4)
         try:
             signature = base64.urlsafe_b64decode(cleaned)
         except Exception:
             signature = base64.b64decode(cleaned)
 
-        # ⭐ التحقق من device_id + hw_fp
-        if hw_fp:
-            payload = (device_id.strip().upper() + "|" + hw_fp.strip().upper()).encode("utf-8")
-        else:
-            payload = device_id.strip().upper().encode("utf-8")
+        cache_key = (did, cleaned, normalized_fp)
+        if cache_key == _ACTIVATION_CACHE_KEY and _ACTIVATION_CACHE_VALID:
+            return True
 
-        public_key.verify(
-            signature,
-            payload,
-            padding.PSS(mgf=padding.MGF1(hashes.SHA256()),
-                        salt_length=padding.PSS.MAX_LENGTH),
-            hashes.SHA256()
+        from cryptography.hazmat.primitives import hashes, serialization
+        from cryptography.hazmat.primitives.asymmetric import padding
+        from cryptography.hazmat.backends import default_backend
+        public_key = serialization.load_pem_public_key(
+            PUBLIC_KEY_PEM.encode("utf-8"), backend=default_backend()
         )
-        return True
+        payload = (did + "|" + normalized_fp).encode("utf-8")
+        try:
+            public_key.verify(
+                signature, payload,
+                padding.PSS(mgf=padding.MGF1(hashes.SHA256()),
+                            salt_length=padding.PSS.MAX_LENGTH),
+                hashes.SHA256()
+            )
+            _ACTIVATION_CACHE_KEY = cache_key
+            _ACTIVATION_CACHE_VALID = True
+            return True
+        except Exception:
+            if cache_key == _ACTIVATION_CACHE_KEY:
+                _ACTIVATION_CACHE_VALID = False
+            return False
     except Exception as e:
         print("Verify error:", e)
         return False
 
-
 def is_activated():
     try:
         conn = sqlite3.connect(get_db_path())
-        row = conn.execute("SELECT value FROM settings WHERE key='license_key'").fetchone()
+        row = conn.execute(
+            "SELECT value FROM settings WHERE key='license_key'"
+        ).fetchone()
         conn.close()
         if not row or not row[0]:
             return False
-        hw_fp = _hardware_fingerprint()
-        return check_activation(get_device_id(), row[0], hw_fp)
-    except Exception:
+        return check_activation(get_device_id(), row[0], _hardware_fingerprint())
+    except Exception as e:
+        print("Activation check warning:", e)
         return False
 
 
@@ -5582,19 +5523,49 @@ class AutoManagerApp(MDApp):
         from jnius import autoclass
         PythonActivity = autoclass('org.kivy.android.PythonActivity')
         resolver = PythonActivity.mActivity.getContentResolver()
+        max_bytes = 200 * 1024 * 1024
+        too_big = "Backup file exceeds the 200 MB limit"
+        # رفض مبكر إذا أبلغ المزوّد عن حجم أكبر من الحد
+        cursor = None
+        try:
+            OpenableColumns = autoclass('android.provider.OpenableColumns')
+            cursor = resolver.query(uri, [OpenableColumns.SIZE], None, None, None)
+            if cursor is not None and cursor.moveToFirst():
+                size_col = cursor.getColumnIndex(OpenableColumns.SIZE)
+                if size_col >= 0 and int(cursor.getLong(size_col)) > max_bytes:
+                    raise ValueError(too_big)
+        finally:
+            if cursor is not None:
+                try: cursor.close()
+                except Exception: pass
         ins = resolver.openInputStream(uri)
         outs = autoclass('java.io.FileOutputStream')(dest)
+        ok = False
         try:
-            try:
-                Channels = autoclass('java.nio.channels.Channels')
-                outs.getChannel().transferFrom(Channels.newChannel(ins), 0, 1 << 40)
-            except Exception:
-                autoclass('android.os.FileUtils').copy(ins, outs)
+            # حلقة نسخ كاملة (transferFrom قد ينسخ جزءاً فقط)
+            Array = autoclass('java.lang.reflect.Array')
+            ByteCls = autoclass('java.lang.Byte')
+            buf = Array.newInstance(ByteCls.TYPE, 65536)
+            total = 0
+            while True:
+                n = ins.read(buf)
+                if n < 0:
+                    break
+                if n == 0:
+                    continue
+                total += n
+                if total > max_bytes:
+                    raise ValueError(too_big)
+                outs.write(buf, 0, n)
+            ok = True
         finally:
             try: outs.close()
             except Exception: pass
             try: ins.close()
             except Exception: pass
+            if not ok:
+                try: os.remove(dest)
+                except Exception: pass
 
     def _android_pick_backup(self):
         try:
@@ -5737,7 +5708,7 @@ class AutoManagerApp(MDApp):
             if not self.is_premium():
                 try:
                     cc = sqlite3.connect(get_db_path())
-                    for k in _premium_settings_keys():
+                    for k in self._premium_settings_keys():
                         cc.execute("DELETE FROM settings WHERE key=?", (k,))
                     cc.commit()
                     cc.close()
@@ -5779,6 +5750,14 @@ class AutoManagerApp(MDApp):
         except Exception as e:
             print("do_restore error:", e)
             self.notify(self.tr("save_error"))
+        finally:
+            # SAF imports use a temporary private copy; never delete the user's source backup.
+            try:
+                temp_path = os.path.abspath(os.path.join(private_dir(), "restore_tmp.db"))
+                if os.path.abspath(path) == temp_path and os.path.isfile(temp_path):
+                    os.remove(temp_path)
+            except Exception as cleanup_error:
+                print("restore temp cleanup warning:", cleanup_error)
 
     # ========== الإحصائيات ==========
     def show_stats(self):
