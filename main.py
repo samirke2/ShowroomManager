@@ -120,7 +120,7 @@ def _find_font():
 
 FONT_FILE = _find_font()
 LOGO_FILE = "logo.png"
-APP_VERSION = "1.1.1"
+APP_VERSION = "1.1.35"
 
 FREE_LIMIT_CARS = 3
 FREE_LIMIT_CLIENTS = 3
@@ -136,8 +136,7 @@ TjOLoDeRUzZXzw0cbgk80BbmlyhBXA8stE5WbYzOWPApoYiaQ5r1g/C6rxQ/9pMz
 QCFrAok2fEVTZwJmnIqE2MBuVo9yRXwlV0S80NrVRVX/7gcWLQfvFAAKfI7RO2PA
 GaNAmwvg50JLu0l/pS8pFcJuljk3dM1RMqQmtjdBEu4AWbbgHZyeOASRczkkr6eO
 YQIDAQAB
------END PUBLIC KEY-----
-"""
+-----END PUBLIC KEY-----"""
 
 RECOVERY_SECRET = "SamirPythDZ_recovery_2025_v1"
 
@@ -1876,48 +1875,15 @@ def check_activation(device_id, code, hw_fp=None):
 
 
 def is_activated():
-    """تحقق من الترخيص مع استعادته من النسخة الخارجية بعد مسح بيانات التطبيق."""
     try:
-        # مهم: استدعاء get_device_id أولاً، لأنه يقرأ ملفات التفعيل الخارجية
-        # ويعيد مزامنة device_id وlicense_key إلى قاعدة البيانات عند توفرها.
-        device_id = get_device_id()
-        hw_fp = _hardware_fingerprint()
-
-        license_key = ""
-        try:
-            conn = sqlite3.connect(get_db_path())
-            row = conn.execute(
-                "SELECT value FROM settings WHERE key='license_key'"
-            ).fetchone()
-            conn.close()
-            if row and row[0]:
-                license_key = row[0]
-        except Exception as e:
-            print("Read database license error:", e)
-
-        # احتياط: إذا لم تتم مزامنة قاعدة البيانات، اقرأ الترخيص الخارجي
-        # بعد أن تحقق get_device_id من سلامة البصمة والجهاز.
-        if not license_key:
-            ext_did, ext_lic, ext_fp, ext_sig = _load_activation()
-            if (ext_did and ext_lic and ext_did.strip().upper() == device_id.strip().upper()
-                    and (not ext_fp or ext_fp.strip().upper() == hw_fp.strip().upper())):
-                license_key = ext_lic
-                try:
-                    conn = sqlite3.connect(get_db_path())
-                    conn.execute(
-                        "INSERT OR REPLACE INTO settings (key, value) VALUES ('license_key', ?)",
-                        (license_key,)
-                    )
-                    conn.commit()
-                    conn.close()
-                except Exception as e:
-                    print("Restore database license error:", e)
-
-        if not license_key:
+        conn = sqlite3.connect(get_db_path())
+        row = conn.execute("SELECT value FROM settings WHERE key='license_key'").fetchone()
+        conn.close()
+        if not row or not row[0]:
             return False
-        return check_activation(device_id, license_key, hw_fp)
-    except Exception as e:
-        print("is_activated error:", e)
+        hw_fp = _hardware_fingerprint()
+        return check_activation(get_device_id(), row[0], hw_fp)
+    except Exception:
         return False
 
 
@@ -4132,7 +4098,7 @@ class AutoManagerApp(MDApp):
                 "• تعديل معلومات الشركة والبنك\n"
                 "• جميع ألوان PDF\n"
                 "• دعم فني مباشر\n"
-                f"• السعر: [b]{FREE_PRICE_DZD} دج[/b] مدى الحياة\n\n"
+                f"• السعر: [b]{FREE_PRICE_DZD} دج[/b] مدة غير محدودة\n\n"
                 "من الإعدادات، اضغط ترقية الآن"
             )
         else:
@@ -4204,7 +4170,7 @@ class AutoManagerApp(MDApp):
                 "تعديل معلومات البنك\n"
                 "جميع ألوان مستندات PDF\n"
                 "دعم فني مباشر\n\n"
-                f"السعر: {FREE_PRICE_DZD} دج مدى الحياة"
+                f"السعر: {FREE_PRICE_DZD} دج مدة غير محدودة"
             )
             T_DEVICE = "معرّف جهازك (أرسله عند الدفع):"
             T_COPY   = "نسخ المعرّف"
@@ -4226,7 +4192,7 @@ class AutoManagerApp(MDApp):
                 "Modifier infos bancaires\n"
                 "10 themes PDF\n"
                 "Support direct\n\n"
-                f"Prix: {FREE_PRICE_DZD} DA a vie"
+                f"Prix: {FREE_PRICE_DZD} DA Durée illimitée"
             )
             T_DEVICE = "ID de l'appareil (envoyez-le) :"
             T_COPY   = "Copier l'ID"
