@@ -5466,7 +5466,7 @@ class AutoManagerApp(MDApp):
                   "/sdcard/Documents/ShowroomManager",
                   "/storage/emulated/0/Download",
                   "/storage/emulated/0/Documents",
-                  os.path.join(os.path.expanduser("~"), "Documents", "ShowroomManager           os.path.join(os.path.expanduser("~"), "ShowroomManager"),
+                  os.path.join(os.path.expanduser("~"), "Documents", "ShowroomManager " ), os.path.join(os.path.expanduser("~"), "ShowroomManager"),
                   os.path.join(os.getcwd(), "ShowroomManager")):
             roots.append(r)
         dirs = []
