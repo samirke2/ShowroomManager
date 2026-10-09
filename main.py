@@ -319,14 +319,14 @@ _APP_ROOT = None
 def app_storage_dir():
     if _kivy_platform == "android":
         cands = [
-            "/storage/emulated/0/Documents/SamirPythDZ",
-            "/storage/emulated/0/SamirPythDZ",
-            "/sdcard/Documents/SamirPythDZ",
+            "/storage/emulated/0/Documents/ShowroomManager",
+            "/storage/emulated/0/ShowroomManager",
+            "/sdcard/Documents/ShowroomManager",
         ]
     else:
         cands = [
-            os.path.join(os.path.expanduser("~"), "Documents", "SamirPythDZ"),
-            os.path.join(os.path.expanduser("~"), "SamirPythDZ"),
+            os.path.join(os.path.expanduser("~"), "Documents", "ShowroomManager"),
+            os.path.join(os.path.expanduser("~"), "ShowroomManager"),
         ]
     for d in cands:
         try:
@@ -343,19 +343,19 @@ def app_storage_dir():
             _act = autoclass('org.kivy.android.PythonActivity').mActivity
             _ext = _act.getExternalFilesDir(None)
             if _ext is not None:
-                d = os.path.join(_ext.getAbsolutePath(), "SamirPythDZ")
+                d = os.path.join(_ext.getAbsolutePath(), "ShowroomManager")
                 os.makedirs(d, exist_ok=True)
                 return d
         except Exception:
             pass
         try:
             from android.storage import app_storage_path
-            d = os.path.join(app_storage_path(), "SamirPythDZ")
+            d = os.path.join(app_storage_path(), "ShowroomManager")
             os.makedirs(d, exist_ok=True)
             return d
         except Exception:
             pass
-    d = os.path.join(os.getcwd(), "SamirPythDZ")
+    d = os.path.join(os.getcwd(), "ShowroomManager")
     try:
         os.makedirs(d, exist_ok=True)
     except Exception:
@@ -412,7 +412,7 @@ def private_dir():
             except Exception:
                 base = None
         if base:
-            d = os.path.join(base, "SamirPythDZ")
+            d = os.path.join(base, "ShowroomManager")
             try:
                 os.makedirs(d, exist_ok=True)
                 return d
@@ -425,18 +425,18 @@ def private_dir():
 #  البصمة العتادية + التوقيع HMAC
 # =====================================================================
 def _external_dir():
-    """المجلد الخارجي الدائم (Documents/SamirPythDZ)."""
+    """المجلد الخارجي الدائم (Documents/ShowroomManager)."""
     if _kivy_platform != "android":
-        d = os.path.join(os.path.expanduser("~"), "Documents", "SamirPythDZ")
+        d = os.path.join(os.path.expanduser("~"), "Documents", "ShowroomManager")
         try:
             os.makedirs(d, exist_ok=True)
             return d
         except Exception:
             return None
     for d in [
-        "/storage/emulated/0/Documents/SamirPythDZ",
-        "/storage/emulated/0/SamirPythDZ",
-        "/sdcard/Documents/SamirPythDZ",
+        "/storage/emulated/0/Documents/ShowroomManager",
+        "/storage/emulated/0/ShowroomManager",
+        "/sdcard/Documents/ShowroomManager",
     ]:
         try:
             os.makedirs(d, exist_ok=True)
@@ -852,7 +852,7 @@ TRANSLATIONS = {
         "color_black": "أسود", "color_navy_dark": "كحلي فاخر",
         "color_white": "أبيض",
         "upgrade_now": "ترقية الآن", "upgrade_title": "ترقية للنسخة الكاملة",
-        "welcome_title": "مرحباً بك في Samir Pyth_DZ",
+        "welcome_title": "مرحباً بك في ShowroomManager",
         "export_data": "تصدير البيانات",
         "export_cars": "تصدير السيارات (CSV)",
         "export_clients": "تصدير الزبائن (CSV)",
@@ -1007,7 +1007,7 @@ TRANSLATIONS = {
         "color_white": "Blanc",
         "upgrade_now": "Mettre a niveau",
         "upgrade_title": "Version complete",
-        "welcome_title": "Bienvenue dans Samir Pyth_DZ",
+        "welcome_title": "Bienvenue dans ShowroomManager",
         "export_data": "Exporter",
         "export_cars": "Exporter Vehicules (CSV)",
         "export_clients": "Exporter Clients (CSV)",
@@ -4022,7 +4022,7 @@ class AutoManagerApp(MDApp):
         L = self.current_lang
         if L == "ar":
             text = (
-                "[size=22][b]مرحباً بك في Samir Pyth_DZ[/b][/size]\n\n"
+                "[size=22][b]مرحباً بك في ShowroomManager[/b][/size]\n\n"
                 "تطبيق متكامل لإدارة معرض السيارات:\n\n"
                 "• إدارة السيارات (متوفرة / محجوزة / مباعة)\n"
                 "• إدارة الزبائن مع كامل بياناتهم\n"
@@ -4044,7 +4044,7 @@ class AutoManagerApp(MDApp):
             )
         else:
             text = (
-                "[size=22][b]Bienvenue dans Samir Pyth_DZ[/b][/size]\n\n"
+                "[size=22][b]Bienvenue dans ShowroomManager[/b][/size]\n\n"
                 "Application complete de gestion de showroom :\n\n"
                 "• Gestion des vehicules\n"
                 "• Gestion des clients\n"
@@ -4203,7 +4203,7 @@ class AutoManagerApp(MDApp):
             try:
                 from kivy.utils import platform
                 from urllib.parse import quote
-                msg = (f"ترقية Samir Pyth_DZ\n"
+                msg = (f"ترقية ShowroomManager\n"
                        f"Device ID: {device_id}\n"
                        f"HW Fingerprint: {hw_fp}")
                 url = "https://wa.me/213553762791?text=" + quote(msg)
@@ -5461,14 +5461,13 @@ class AutoManagerApp(MDApp):
         roots = []
         try: roots.append(app_root())
         except Exception: pass
-        for r in ("/storage/emulated/0/Documents/SamirPythDZ",
-                  "/storage/emulated/0/SamirPythDZ",
-                  "/sdcard/Documents/SamirPythDZ",
+        for r in ("/storage/emulated/0/Documents/ShowroomManager",
+                  "/storage/emulated/0/ShowroomManager",
+                  "/sdcard/Documents/ShowroomManager",
                   "/storage/emulated/0/Download",
                   "/storage/emulated/0/Documents",
-                  os.path.join(os.path.expanduser("~"), "Documents", "SamirPythDZ"),
-                  os.path.join(os.path.expanduser("~"), "SamirPythDZ"),
-                  os.path.join(os.getcwd(), "SamirPythDZ")):
+                  os.path.join(os.path.expanduser("~"), "Documents", "ShowroomManager           os.path.join(os.path.expanduser("~"), "ShowroomManager"),
+                  os.path.join(os.getcwd(), "ShowroomManager")):
             roots.append(r)
         dirs = []
         for r in roots:
@@ -5893,7 +5892,7 @@ class AutoManagerApp(MDApp):
         badge = "PREMIUM" if self.is_premium() else "FREE"
         if L == "ar":
             text = (
-                f"[size=20][b]Samir Pyth_DZ[/b][/size]\n\n"
+                f"[size=20][b]ShowroomManager[/b][/size]\n\n"
                 f"النسخة: {APP_VERSION} ({badge})\n\n"
                 "[b]المطوّر[/b]\nSamir Pyth_DZ\n\n"
                 "[b]التواصل[/b]\nهاتف: 0553762791\nبريد: kenefsamir0@gmail.com\n\n"
@@ -5907,7 +5906,7 @@ class AutoManagerApp(MDApp):
             )
         else:
             text = (
-                f"[size=20][b]Samir Pyth_DZ[/b][/size]\n\n"
+                f"[size=20][b]ShowroomManager[/b][/size]\n\n"
                 f"Version: {APP_VERSION} ({badge})\n\n"
                 "[b]Developpeur[/b]\nSamir Pyth_DZ\n\n"
                 "[b]Contact[/b]\nTel: +213 553 762 791\nEmail: kenefsamir0@gmail.com\n\n"
