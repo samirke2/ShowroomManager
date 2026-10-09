@@ -1,12 +1,12 @@
 [app]
 title = ShowroomManager
-package.name = samirpythdz
+package.name = ShowroomManager
 package.domain = org.samir
 source.dir = .
 source.include_exts = py,png,jpg,kv,atlas,ttf,xml
 source.exclude_dirs = bin, .buildozer, venv, __pycache__, .git
 source.exclude_patterns = *.db, startup_error.txt, *.pdf
-version = 1.1.1
+version = 1.1.36
 
 icon.filename = %(source.dir)s/icon.png
 presplash.filename = %(source.dir)s/splash.png

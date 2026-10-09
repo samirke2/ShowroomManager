@@ -4133,9 +4133,9 @@ class AutoManagerApp(MDApp):
                 "Modifier infos bancaires\n"
                 "10 themes PDF\n"
                 "Support direct\n\n"
-                f"Prix: {FREE_PRICE_DZD} DA Durée illimitée"
+                f"Prix: {FREE_PRICE_DZD} DA Duree illimitee"
             )
-            T_DEVICE = "ID de l'appareil (envoyez-le) :"
+            T_DEVICE = "ID de l'appareil :"
             T_COPY   = "Copier l'ID"
             T_CODE   = "Apres paiement, entrez le code :"
             T_ACT    = "Activer"
@@ -4175,7 +4175,7 @@ class AutoManagerApp(MDApp):
         box.add_widget(did_field)
 
         T_HWFP = ("البصمة العتادية (أرسلها أيضاً):" if L == "ar"
-                  else "Empreinte materielle (envoyez-la aussi) :")
+                  else "Empreinte materielle :")
         box.add_widget(MDLabel(
             text=self.ar(T_HWFP) if L == "ar" else T_HWFP,
             size_hint_y=None, height=dp(20),
