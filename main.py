@@ -4146,6 +4146,7 @@ class AutoManagerApp(MDApp):
         self.welcome_dialog.open()
 
     # ========== الترقية ==========
+    
     def show_upgrade_dialog(self, reason=""):
         if self.is_premium():
             self.notify(self.ar("التطبيق مفعّل بالفعل") if self.current_lang == "ar"
@@ -4219,6 +4220,7 @@ class AutoManagerApp(MDApp):
         f_lbl.bind(width=lambda i, w: setattr(i, "text_size", (w, None)))
         f_lbl.bind(texture_size=lambda i, ts: setattr(i, "height", ts[1] + 5))
         box.add_widget(f_lbl)
+
         hw_fp = _hardware_fingerprint()
 
         box.add_widget(MDLabel(
@@ -4232,7 +4234,6 @@ class AutoManagerApp(MDApp):
                                 icon_left="identifier", halign="center")
         box.add_widget(did_field)
 
-        # ⭐ عرض البصمة العتادية
         T_HWFP = ("البصمة العتادية (أرسلها أيضاً):" if L == "ar"
                   else "Empreinte materielle (envoyez-la aussi) :")
         box.add_widget(MDLabel(
@@ -4253,12 +4254,6 @@ class AutoManagerApp(MDApp):
             except Exception:
                 pass
 
-        def copy_did(_=None):
-            try:
-                Clipboard.copy(device_id)
-                self.notify(self.tr("copied_ok"))
-            except Exception:
-                pass
         box.add_widget(MDFlatButton(
             text=self.ar(T_COPY) if L == "ar" else T_COPY,
             pos_hint={"center_x": 0.5},
@@ -4332,15 +4327,14 @@ class AutoManagerApp(MDApp):
             if not code:
                 self.notify(self.tr("enter_activation"))
                 return
-            hw_fp = _hardware_fingerprint()
-            if check_activation(device_id, code, hw_fp):
+            hw_fp2 = _hardware_fingerprint()
+            if check_activation(device_id, code, hw_fp2):
                 try:
                     conn = sqlite3.connect(get_db_path())
                     conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('license_key', ?)", (code,))
                     conn.commit()
                     conn.close()
-                    # ⭐ حفظ التفعيل + البصمة + التوقيع في الملف الخارجي
-                    _save_activation(get_device_id(), code, hw_fp)
+                    _save_activation(get_device_id(), code, hw_fp2)
                 except Exception:
                     pass
                 self.upgrade_dialog.dismiss()
@@ -4351,6 +4345,23 @@ class AutoManagerApp(MDApp):
             else:
                 self.notify(self.tr("activation_bad"))
 
+        box.add_widget(MDRaisedButton(
+            text=self.ar(T_ACT) if L == "ar" else T_ACT,
+            md_bg_color=(0.15, 0.55, 0.32, 1),
+            size_hint_y=None, height=dp(40),
+            pos_hint={"center_x": 0.5},
+            on_release=on_activate))
+
+        # ⭐ هذا الجزء كان مفقوداً - وهو سبب عدم فتح النافذة
+        self.upgrade_dialog = self.dlg(
+            title="",
+            type="custom",
+            content_cls=self.wrap_dialog(box),
+            buttons=[MDFlatButton(text=self.trd("close"),
+                                  on_release=lambda x: self.upgrade_dialog.dismiss())])
+        self.upgrade_dialog.open()    
+    
+    
     # ========== النسخ الاحتياطي ==========
     def backup_db(self, prefix="backup"):
         try:
