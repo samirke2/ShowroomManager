@@ -5680,6 +5680,17 @@ class AutoManagerApp(MDApp):
                                     on_release=browse)])
         self.restore_list_dialog.open()
 
+    
+    def _premium_settings_keys(self):
+        """مفاتيح الإعدادات المدفوعة (يجب حذفها عند استرداد مجاني)."""
+        return (
+            "company_name", "company_rc", "company_nif", "company_phone",
+            "company_address", "company_address_fr", "company_city",
+            "company_logo", "pdf_color",
+            "bank_holder", "bank_name", "bank_agency", "bank_account",
+        )
+    
+    
     def confirm_restore(self, path):
         self.restore_dialog = self.dlg(
             title=self.trd("restore_db"),
@@ -5724,6 +5735,15 @@ class AutoManagerApp(MDApp):
             dst.close()
             src.close()
             init_db()
+            if not self.is_premium():
+                try:
+                    cc = sqlite3.connect(get_db_path())
+                    for k in _premium_settings_keys():
+                        cc.execute("DELETE FROM settings WHERE key=?", (k,))
+                    cc.commit()
+                    cc.close()
+                except Exception as e:
+                    print("premium settings strip error:", e)
 
             # ⭐ إعادة كتابة معرّف الجهاز الحالي (وليس من النسخة) لمنع نقل التفعيل
             lc = sqlite3.connect(get_db_path())
