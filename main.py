@@ -129,14 +129,15 @@ FREE_RESTORE_MAX = 3
 FREE_PRICE_DZD = 15000
 
 PUBLIC_KEY_PEM = """-----BEGIN PUBLIC KEY-----
-MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAo9FdY/NwAfWT7aWzRAUo
-Bg6owwNhFLcZJj9lTpwceISQYZlfmg/HswmJHisEh8x23HAdCW1ViTCkRypbki8W
-TjOLoDeRUzZXzw0cbgk80BbmlyhBXA8stE5WbYzOWPApoYiaQ5r1g/C6rxQ/9pMz
-0BVzbY4O4TzQ6PDRcStel/5blyBGxswzNAHhYIAMV2sPKdidpxe2BxRIz4gQH07s
-QCFrAok2fEVTZwJmnIqE2MBuVo9yRXwlV0S80NrVRVX/7gcWLQfvFAAKfI7RO2PA
-GaNAmwvg50JLu0l/pS8pFcJuljk3dM1RMqQmtjdBEu4AWbbgHZyeOASRczkkr6eO
-YQIDAQAB
------END PUBLIC KEY-----"""
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA6y9ERz0qRyiOeMa3vpwJ
+fnqfKFGqy5fGj5ordJjU6m39nMEeqV5u6sj+wEpYxDVT64TArJBowh94EuauEIQB
+M7vHWdGpXieTRK+uCtUoOra5LVWdhL+br97PGLlB9ELJNbtCV2+8hSe9u66zUGii
+OgGfJEe7AlN1PqMVf1sOBBSTHdtamqlThbwno7FyvPNOseDeHTQ4mmU4fR/aSz3O
+Tc3kD8L7roiji2C9Zomh5xrgiUSasCpe/rV65eYiEuutcGbRhFksl1Dm1GZwdPuI
+3mX/q/bmJfdDdMgzEk29Tv9h7TWUgNHLljoIKMOe7odfvdbC98JR9BnLqY2n8amQ
+9QIDAQAB
+-----END PUBLIC KEY-----
+"""
 
 RECOVERY_SECRET = "SamirPythDZ_recovery_2025_v1"
 
@@ -1875,15 +1876,48 @@ def check_activation(device_id, code, hw_fp=None):
 
 
 def is_activated():
+    """تحقق من الترخيص مع استعادته من النسخة الخارجية بعد مسح بيانات التطبيق."""
     try:
-        conn = sqlite3.connect(get_db_path())
-        row = conn.execute("SELECT value FROM settings WHERE key='license_key'").fetchone()
-        conn.close()
-        if not row or not row[0]:
-            return False
+        # مهم: استدعاء get_device_id أولاً، لأنه يقرأ ملفات التفعيل الخارجية
+        # ويعيد مزامنة device_id وlicense_key إلى قاعدة البيانات عند توفرها.
+        device_id = get_device_id()
         hw_fp = _hardware_fingerprint()
-        return check_activation(get_device_id(), row[0], hw_fp)
-    except Exception:
+
+        license_key = ""
+        try:
+            conn = sqlite3.connect(get_db_path())
+            row = conn.execute(
+                "SELECT value FROM settings WHERE key='license_key'"
+            ).fetchone()
+            conn.close()
+            if row and row[0]:
+                license_key = row[0]
+        except Exception as e:
+            print("Read database license error:", e)
+
+        # احتياط: إذا لم تتم مزامنة قاعدة البيانات، اقرأ الترخيص الخارجي
+        # بعد أن تحقق get_device_id من سلامة البصمة والجهاز.
+        if not license_key:
+            ext_did, ext_lic, ext_fp, ext_sig = _load_activation()
+            if (ext_did and ext_lic and ext_did.strip().upper() == device_id.strip().upper()
+                    and (not ext_fp or ext_fp.strip().upper() == hw_fp.strip().upper())):
+                license_key = ext_lic
+                try:
+                    conn = sqlite3.connect(get_db_path())
+                    conn.execute(
+                        "INSERT OR REPLACE INTO settings (key, value) VALUES ('license_key', ?)",
+                        (license_key,)
+                    )
+                    conn.commit()
+                    conn.close()
+                except Exception as e:
+                    print("Restore database license error:", e)
+
+        if not license_key:
+            return False
+        return check_activation(device_id, license_key, hw_fp)
+    except Exception as e:
+        print("is_activated error:", e)
         return False
 
 
