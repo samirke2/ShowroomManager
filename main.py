@@ -141,6 +141,8 @@ Tc3kD8L7roiji2C9Zomh5xrgiUSasCpe/rV65eYiEuutcGbRhFksl1Dm1GZwdPuI
 
 RECOVERY_SECRET = "SamirPythDZ_recovery_2025_v1"
 
+# ⭐ مفتاح HMAC السري (غيّره إلى قيمة عشوائية خاصة بك واحفظه في مكان آمن)
+_HMAC_SECRET = b"SamirPythDZ_2025_v1_$xK9mN2pQ8vR3wZ5aB7cD4eF6_#@!"
 # ---- fix: adaptive_height must also apply the initial height (KivyMD 1.1.1 + Android) ----
 try:
     from kivymd.uix import MDAdaptiveWidget as _MDAW
@@ -417,6 +419,138 @@ def private_dir():
             except Exception:
                 pass
     return app_root()
+
+
+# =====================================================================
+#  البصمة العتادية + التوقيع HMAC
+# =====================================================================
+def _external_dir():
+    """المجلد الخارجي الدائم (Documents/SamirPythDZ)."""
+    if _kivy_platform != "android":
+        d = os.path.join(os.path.expanduser("~"), "Documents", "SamirPythDZ")
+        try:
+            os.makedirs(d, exist_ok=True)
+            return d
+        except Exception:
+            return None
+    for d in [
+        "/storage/emulated/0/Documents/SamirPythDZ",
+        "/storage/emulated/0/SamirPythDZ",
+        "/sdcard/Documents/SamirPythDZ",
+    ]:
+        try:
+            os.makedirs(d, exist_ok=True)
+            t = os.path.join(d, ".wt")
+            with open(t, "w") as f:
+                f.write("ok")
+            os.remove(t)
+            return d
+        except Exception:
+            continue
+    return None
+
+
+def _hardware_fingerprint():
+    """بصمة عتادية فريدة للجهاز (لا يمكن نقلها)."""
+    if _kivy_platform != "android":
+        return "DESKTOP"
+    try:
+        from jnius import autoclass
+        Build = autoclass('android.os.Build')
+        parts = []
+        for attr in ("FINGERPRINT", "MANUFACTURER", "MODEL", "BOARD", "HARDWARE", "DEVICE"):
+            try:
+                v = getattr(Build, attr)
+                if v:
+                    parts.append(str(v))
+            except Exception:
+                pass
+        if parts:
+            raw = "|".join(parts)
+            fp = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16].upper()
+            print("✓ Hardware fingerprint:", fp)
+            return fp
+    except Exception as e:
+        print("hardware fingerprint error:", e)
+    return ""
+
+
+def _sign_fp(hw_fp):
+    """توقيع البصمة بمفتاح HMAC سري."""
+    import hmac
+    if not hw_fp:
+        return ""
+    return hmac.new(_HMAC_SECRET, hw_fp.encode("utf-8"), hashlib.sha256).hexdigest()[:32].upper()
+
+
+def _verify_fp(hw_fp, signature):
+    """التحقق من توقيع البصمة."""
+    import hmac
+    if not hw_fp or not signature:
+        return False
+    return hmac.compare_digest(_sign_fp(hw_fp), signature.upper())
+
+
+def _wipe_external_activation():
+    """حذف جميع ملفات التفعيل من المجلد الخارجي."""
+    d = _external_dir()
+    if not d:
+        return
+    for f in (".device_id", ".license", ".hw_fp", ".hw_sig"):
+        try:
+            p = os.path.join(d, f)
+            if os.path.isfile(p):
+                os.remove(p)
+        except Exception:
+            pass
+    print("✓ External activation files wiped")
+
+
+def _save_activation(device_id, license_key="", hw_fp=None):
+    """حفظ المعرّف + التفعيل + البصمة + التوقيع في الملف الخارجي."""
+    d = _external_dir()
+    if not d:
+        print("✗ Cannot access external dir")
+        return False
+    try:
+        with open(os.path.join(d, ".device_id"), "w", encoding="utf-8") as f:
+            f.write(device_id or "")
+        if license_key:
+            with open(os.path.join(d, ".license"), "w", encoding="utf-8") as f:
+                f.write(license_key)
+            if hw_fp is None:
+                hw_fp = _hardware_fingerprint()
+            if hw_fp:
+                with open(os.path.join(d, ".hw_fp"), "w", encoding="utf-8") as f:
+                    f.write(hw_fp)
+                with open(os.path.join(d, ".hw_sig"), "w", encoding="utf-8") as f:
+                    f.write(_sign_fp(hw_fp))
+        print("✓ Activation saved to:", d)
+        return True
+    except Exception as e:
+        print("save activation error:", e)
+        return False
+
+
+def _load_activation():
+    """تحميل المعرّف + التفعيل + البصمة + التوقيع من الملف الخارجي."""
+    d = _external_dir()
+    if not d:
+        return None, None, None, None
+    did, lic, fp, sig = None, None, None, None
+    for fname in (".device_id", ".license", ".hw_fp", ".hw_sig"):
+        try:
+            p = os.path.join(d, fname)
+            if os.path.isfile(p):
+                with open(p, "r", encoding="utf-8") as f:
+                    val = f.read().strip() or None
+                if fname == ".device_id": did = val
+                elif fname == ".license": lic = val
+                elif fname == ".hw_fp": fp = val
+                elif fname == ".hw_sig": sig = val
+        except Exception as e:
+            print("load %s error:" % fname, e)
+    return did, lic, fp, sig
 
 
 def get_db_path():
@@ -1614,76 +1748,94 @@ def _hardware_fingerprint():
 
 
 def get_device_id():
-    persistent_file = os.path.join(app_root(), ".device_id")
-    stored_id = ""
-    
-    # 1. قراءة المعرّف المخزّن
-    try:
-        if os.path.isfile(persistent_file):
-            with open(persistent_file, "r", encoding="utf-8") as f:
-                stored_id = f.read().strip()
-    except Exception as e:
-        print("read persistent error:", e)
+    # ⭐ قراءة الملف الخارجي
+    ext_did, ext_lic, ext_fp, ext_sig = _load_activation()
 
-    # 2. إذا لم يوجد في الملف، حاول من قاعدة البيانات
-    if not stored_id:
+    if ext_did:
+        current_fp = _hardware_fingerprint()
+
+        # ⭐ 1. التحقق من صحة توقيع البصمة (كشف العبث)
+        if ext_fp:
+            if not ext_sig or not _verify_fp(ext_fp, ext_sig):
+                print("🚨 TAMPERED .hw_fp detected! Signature invalid.")
+                _wipe_external_activation()
+                try:
+                    conn = sqlite3.connect(get_db_path())
+                    conn.execute("DELETE FROM settings WHERE key IN ('device_id','license_key')")
+                    conn.commit()
+                    conn.close()
+                except Exception:
+                    pass
+                new_id = uuid.uuid4().hex[:16].upper()
+                _save_activation(new_id)
+                try:
+                    conn = sqlite3.connect(get_db_path())
+                    conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('device_id', ?)", (new_id,))
+                    conn.commit()
+                    conn.close()
+                except Exception:
+                    pass
+                return new_id
+
+        # ⭐ 2. التحقق من تطابق البصمة (كشف النسخ لجهاز آخر)
+        if ext_fp and current_fp and ext_fp != current_fp:
+            print("⚠️ FINGERPRINT MISMATCH! Different device detected.")
+            _wipe_external_activation()
+            try:
+                conn = sqlite3.connect(get_db_path())
+                conn.execute("DELETE FROM settings WHERE key IN ('device_id','license_key')")
+                conn.commit()
+                conn.close()
+            except Exception:
+                pass
+            new_id = uuid.uuid4().hex[:16].upper()
+            _save_activation(new_id)
+            try:
+                conn = sqlite3.connect(get_db_path())
+                conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('device_id', ?)", (new_id,))
+                conn.commit()
+                conn.close()
+            except Exception:
+                pass
+            return new_id
+
+        # ⭐ 3. كل شيء سليم → مزامنة مع قاعدة البيانات
         try:
             conn = sqlite3.connect(get_db_path())
-            row = conn.execute("SELECT value FROM settings WHERE key='device_id'").fetchone()
+            conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('device_id', ?)", (ext_did,))
+            if ext_lic:
+                conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('license_key', ?)", (ext_lic,))
+            conn.commit()
             conn.close()
-            if row and row[0] and row[0] != "UNKNOWN":
-                stored_id = row[0]
         except Exception:
             pass
+        return ext_did
 
-    # 3. إذا وجدنا معرّفاً سابقاً، تحقق من بصمة الجهاز
-    hw_fp = _hardware_fingerprint()
-    
-    if stored_id:
-        # إذا وُجدت بصمة عتادية، نتحقق من تطابقها
-        try:
-            conn = sqlite3.connect(get_db_path())
-            row = conn.execute("SELECT value FROM settings WHERE key='hw_fingerprint'").fetchone()
-            old_fp = row[0] if row and row[0] else ""
-            conn.close()
-            
-            # ⚠️ إذا كانت البصمة القديمة موجودة ومختلفة عن الحالية → الجهاز تغيّر!
-            if old_fp and hw_fp and old_fp != hw_fp:
-                print("⚠️ Device changed! Generating new ID.")
-                # نحذف التفعيل ونعيد توليد معرّف جديد
-                stored_id = ""
-        except Exception:
-            pass
-
-    # 4. إذا لم يوجد معرّف، نولّد واحداً جديداً
-    if not stored_id:
-        if hw_fp:
-            # ندمج البصمة العتادية مع عشوائي لضمان التفرد
-            stored_id = hashlib.sha256((hw_fp + secrets.token_hex(8)).encode("utf-8")).hexdigest()[:16].upper()
-        else:
-            stored_id = uuid.uuid4().hex[:16].upper()
-
-    # 5. الحفظ
-    try:
-        with open(persistent_file, "w", encoding="utf-8") as f:
-            f.write(stored_id)
-    except Exception as e:
-        print("write persistent error:", e)
-
+    # لا يوجد ملف خارجي → نقرأ من قاعدة البيانات
     try:
         conn = sqlite3.connect(get_db_path())
-        conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('device_id', ?)", (stored_id,))
-        if hw_fp:
-            conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('hw_fingerprint', ?)", (hw_fp,))
+        row = conn.execute("SELECT value FROM settings WHERE key='device_id'").fetchone()
+        conn.close()
+        if row and row[0] and row[0] != "UNKNOWN":
+            _save_activation(row[0])
+            return row[0]
+    except Exception:
+        pass
+
+    # توليد معرّف جديد
+    did = uuid.uuid4().hex[:16].upper()
+    _save_activation(did)
+    try:
+        conn = sqlite3.connect(get_db_path())
+        conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('device_id', ?)", (did,))
         conn.commit()
         conn.close()
     except Exception:
         pass
+    return did
 
-    return stored_id
 
-
-def check_activation(device_id, code):
+def check_activation(device_id, code, hw_fp=None):
     if not code or not device_id:
         return False
     if "PLACEHOLDER" in PUBLIC_KEY_PEM:
@@ -1703,9 +1855,16 @@ def check_activation(device_id, code):
             signature = base64.urlsafe_b64decode(cleaned)
         except Exception:
             signature = base64.b64decode(cleaned)
+
+        # ⭐ التحقق من device_id + hw_fp
+        if hw_fp:
+            payload = (device_id.strip().upper() + "|" + hw_fp.strip().upper()).encode("utf-8")
+        else:
+            payload = device_id.strip().upper().encode("utf-8")
+
         public_key.verify(
             signature,
-            device_id.strip().upper().encode("utf-8"),
+            payload,
             padding.PSS(mgf=padding.MGF1(hashes.SHA256()),
                         salt_length=padding.PSS.MAX_LENGTH),
             hashes.SHA256()
@@ -1723,7 +1882,8 @@ def is_activated():
         conn.close()
         if not row or not row[0]:
             return False
-        return check_activation(get_device_id(), row[0])
+        hw_fp = _hardware_fingerprint()
+        return check_activation(get_device_id(), row[0], hw_fp)
     except Exception:
         return False
 
@@ -4060,6 +4220,8 @@ class AutoManagerApp(MDApp):
         f_lbl.bind(texture_size=lambda i, ts: setattr(i, "height", ts[1] + 5))
         box.add_widget(f_lbl)
 
+                hw_fp = _hardware_fingerprint()
+
         box.add_widget(MDLabel(
             text=self.ar(T_DEVICE) if L == "ar" else T_DEVICE,
             size_hint_y=None, height=dp(20),
@@ -4071,6 +4233,27 @@ class AutoManagerApp(MDApp):
                                 icon_left="identifier", halign="center")
         box.add_widget(did_field)
 
+        # ⭐ عرض البصمة العتادية
+        T_HWFP = ("البصمة العتادية (أرسلها أيضاً):" if L == "ar"
+                  else "Empreinte materielle (envoyez-la aussi) :")
+        box.add_widget(MDLabel(
+            text=self.ar(T_HWFP) if L == "ar" else T_HWFP,
+            size_hint_y=None, height=dp(20),
+            bold=True, font_size="12sp",
+            halign="right" if L == "ar" else "left",
+            theme_text_color="Custom", text_color=(0.08, 0.45, 0.75, 1)))
+        hw_field = MDTextField(text=hw_fp, readonly=True,
+                               mode="rectangle", font_size="14sp",
+                               icon_left="fingerprint", halign="center")
+        box.add_widget(hw_field)
+
+        def copy_both(_=None):
+            try:
+                Clipboard.copy("Device ID: %s\nHW Fingerprint: %s" % (device_id, hw_fp))
+                self.notify(self.tr("copied_ok"))
+            except Exception:
+                pass
+
         def copy_did(_=None):
             try:
                 Clipboard.copy(device_id)
@@ -4080,13 +4263,15 @@ class AutoManagerApp(MDApp):
         box.add_widget(MDFlatButton(
             text=self.ar(T_COPY) if L == "ar" else T_COPY,
             pos_hint={"center_x": 0.5},
-            on_release=copy_did))
+            on_release=copy_both))
 
         def open_wa(_=None):
             try:
                 from kivy.utils import platform
                 from urllib.parse import quote
-                msg = f"ترقية Samir Pyth_DZ. معرّف الجهاز: {device_id}"
+                msg = (f"ترقية Samir Pyth_DZ\n"
+                       f"Device ID: {device_id}\n"
+                       f"HW Fingerprint: {hw_fp}")
                 url = "https://wa.me/213553762791?text=" + quote(msg)
                 if platform == "android":
                     try:
@@ -4148,12 +4333,15 @@ class AutoManagerApp(MDApp):
             if not code:
                 self.notify(self.tr("enter_activation"))
                 return
-            if check_activation(device_id, code):
+            hw_fp = _hardware_fingerprint()
+            if check_activation(device_id, code, hw_fp):
                 try:
                     conn = sqlite3.connect(get_db_path())
                     conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('license_key', ?)", (code,))
                     conn.commit()
                     conn.close()
+                    # ⭐ حفظ التفعيل + البصمة + التوقيع في الملف الخارجي
+                    _save_activation(get_device_id(), code, hw_fp)
                 except Exception:
                     pass
                 self.upgrade_dialog.dismiss()
@@ -4163,21 +4351,6 @@ class AutoManagerApp(MDApp):
                 self.refresh_app_title()
             else:
                 self.notify(self.tr("activation_bad"))
-
-        box.add_widget(MDRaisedButton(
-            text=self.ar(T_ACT) if L == "ar" else T_ACT,
-            md_bg_color=(0.15, 0.55, 0.32, 1),
-            size_hint_y=None, height=dp(40),
-            pos_hint={"center_x": 0.5},
-            on_release=on_activate))
-
-        self.upgrade_dialog = self.dlg(
-            title="",
-            type="custom",
-            content_cls=self.wrap_dialog(box),
-            buttons=[MDFlatButton(text=self.trd("close"),
-                                  on_release=lambda x: self.upgrade_dialog.dismiss())])
-        self.upgrade_dialog.open()
 
     # ========== النسخ الاحتياطي ==========
     def backup_db(self, prefix="backup"):
@@ -5553,6 +5726,16 @@ class AutoManagerApp(MDApp):
                 lc.execute("DELETE FROM settings WHERE key='license_key'")
             lc.commit()
             lc.close()
+            # ⭐ إعادة كتابة الملف الخارجي بعد الاسترداد
+            _save_activation(old_device_id, old_license or "")
+            # ⭐ حذف أي بصمة قديمة قادمة من النسخة الاحتياطية
+            try:
+                conn2 = sqlite3.connect(get_db_path())
+                conn2.execute("DELETE FROM settings WHERE key='hw_fingerprint'")
+                conn2.commit()
+                conn2.close()
+            except Exception:
+                pass
 
             self.load_cars()
             self.load_clients()
