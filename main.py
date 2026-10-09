@@ -4219,8 +4219,7 @@ class AutoManagerApp(MDApp):
         f_lbl.bind(width=lambda i, w: setattr(i, "text_size", (w, None)))
         f_lbl.bind(texture_size=lambda i, ts: setattr(i, "height", ts[1] + 5))
         box.add_widget(f_lbl)
-
-                hw_fp = _hardware_fingerprint()
+        hw_fp = _hardware_fingerprint()
 
         box.add_widget(MDLabel(
             text=self.ar(T_DEVICE) if L == "ar" else T_DEVICE,
