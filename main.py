@@ -5030,14 +5030,14 @@ class AutoManagerApp(MDApp):
                 c.execute("UPDATE contracts SET car_id=?, client_id=?, contract_price=?, paid_amount=?, remaining_amount=? WHERE id=?",
                           (car_id, client_id, price, paid, remaining, contract_id))
                 if old_car != car_id:
-                    c.execute("UPDATE cars SET status=1 WHERE id=?", (old_car,))
-                c.execute("UPDATE cars SET status=3 WHERE id=?", (car_id,))
+                    c.execute("UPDATE cars SET status=1 WHERE id=? AND status=2", (old_car,))
+                c.execute("UPDATE cars SET status=2 WHERE id=?", (car_id,))
                 self.contract_edit_id = None
             else:
                 c.execute("INSERT INTO contracts (car_id, client_id, contract_price, paid_amount, remaining_amount, date) VALUES (?, ?, ?, ?, ?, datetime('now','localtime'))",
                           (car_id, client_id, price, paid, remaining))
                 contract_id = c.lastrowid
-                c.execute("UPDATE cars SET status=3 WHERE id=?", (car_id,))
+                c.execute("UPDATE cars SET status=2 WHERE id=?", (car_id,))
             if profit_stored:
                 c.execute("UPDATE cars SET profit_margin=? WHERE id=?", (profit_stored, car_id))
             conn.commit()
@@ -5466,7 +5466,7 @@ class AutoManagerApp(MDApp):
                   "/sdcard/Documents/ShowroomManager",
                   "/storage/emulated/0/Download",
                   "/storage/emulated/0/Documents",
-                  os.path.join(os.path.expanduser("~"), "Documents", "ShowroomManager " ), os.path.join(os.path.expanduser("~"), "ShowroomManager"),
+                  os.path.join(os.path.expanduser("~"), "Documents", "ShowroomManager" ), os.path.join(os.path.expanduser("~"), "ShowroomManager"),
                   os.path.join(os.getcwd(), "ShowroomManager")):
             roots.append(r)
         dirs = []
@@ -6193,7 +6193,7 @@ class AutoManagerApp(MDApp):
             c.execute("SELECT car_id FROM contracts WHERE id=?", (contract_id,))
             row = c.fetchone()
             if row:
-                c.execute("UPDATE cars SET status=1 WHERE id=?", (row[0],))
+                c.execute("UPDATE cars SET status=1 WHERE id=? AND status=2", (row[0],))
             c.execute("DELETE FROM contracts WHERE id=?", (contract_id,))
             conn.commit()
             conn.close()
