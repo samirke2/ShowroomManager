@@ -141,7 +141,6 @@ YQIDAQAB
 
 RECOVERY_SECRET = "SamirPythDZ_recovery_2025_v1"
 
-# ⭐ مفتاح HMAC السري (غيّره إلى قيمة عشوائية خاصة بك واحفظه في مكان آمن)
 _HMAC_SECRET = b"SamirPythDZ_2025_v1_$xK9mN2pQ8vR3wZ5aB7cD4eF6_#@!"
 # ---- fix: adaptive_height must also apply the initial height (KivyMD 1.1.1 + Android) ----
 try:
@@ -425,7 +424,6 @@ def private_dir():
 #  البصمة العتادية + التوقيع HMAC
 # =====================================================================
 def _external_dir():
-    """المجلد الخارجي الدائم (Documents/ShowroomManager)."""
     if _kivy_platform != "android":
         d = os.path.join(os.path.expanduser("~"), "Documents", "ShowroomManager")
         try:
@@ -451,7 +449,6 @@ def _external_dir():
 
 
 def _sign_fp(hw_fp):
-    """توقيع البصمة بمفتاح HMAC سري."""
     import hmac
     if not hw_fp:
         return ""
@@ -459,7 +456,6 @@ def _sign_fp(hw_fp):
 
 
 def _save_activation(device_id, license_key="", hw_fp=None):
-    """حفظ المعرّف + التفعيل + البصمة + التوقيع في الملف الخارجي."""
     d = _external_dir()
     if not d:
         print("✗ Cannot access external dir")
@@ -485,7 +481,6 @@ def _save_activation(device_id, license_key="", hw_fp=None):
 
 
 def _load_activation():
-    """تحميل المعرّف + التفعيل + البصمة + التوقيع من الملف الخارجي."""
     d = _external_dir()
     if not d:
         return None, None, None, None
@@ -1088,6 +1083,7 @@ PDF_THEMES = {
 
 NAVY = colors.HexColor("#0B5394") if HAS_REPORTLAB else None
 GOLD = colors.HexColor("#F1C40F") if HAS_REPORTLAB else None
+HEADING_COLOR = colors.HexColor("#0B1F3A") if HAS_REPORTLAB else None
 _current_theme_name = "blue"
 WHITE_THEME_MODE = False
 
@@ -1269,6 +1265,15 @@ def draw_text(cv, x, y, text, fn, size, align="left"):
         cv.setFont(f, size)
         cv.drawString(x, y, s)
         x += pdfmetrics.stringWidth(s, f, size)
+
+
+def draw_heading(cv, x, y, text, fn, size, align="left"):
+    """عنوان داكِن دائم لا يتأثر بثيم الهيدر + محاكاة bold."""
+    if HEADING_COLOR is not None:
+        cv.setFillColor(HEADING_COLOR)
+    # محاكاة bold: رسم النص ثلاث مرات بإزاحة طفيفة
+    for dx in (-0.5, 0.0, 0.5):
+        draw_text(cv, x + dx, y, text, fn, size, align)
 
 
 def wrap_logical(text, maxw, fn, size):
@@ -1666,7 +1671,6 @@ def doc_folder(doc_type, lang):
 #  الترخيص
 # =====================================================================
 def _android_id():
-    """Return Android's app/device identifier when available; otherwise empty."""
     if _kivy_platform != "android":
         return ""
     try:
@@ -1684,7 +1688,6 @@ def _android_id():
 
 
 def _hardware_fingerprint():
-    """Current fingerprint: SHA256(ANDROID_ID|MANUFACTURER|MODEL)[:16]."""
     if _kivy_platform != "android":
         return ""
     try:
@@ -1698,17 +1701,10 @@ def _hardware_fingerprint():
             return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16].upper()
     except Exception as e:
         print("hardware fingerprint error:", e)
-    # Do not substitute an empty/partial fingerprint: that could invalidate a license.
     return ""
 
 
 def get_device_id():
-    """Read the saved device ID without destructively deleting activation data.
-
-    A missing, unreadable, or changed fingerprint is not sufficient evidence of
-    tampering. The signed license is checked separately against this device's
-    current fingerprint.
-    """
     ext_did, ext_lic, _ext_fp, _ext_sig = _load_activation()
 
     if ext_did:
@@ -1729,7 +1725,6 @@ def get_device_id():
             print("Activation sync warning:", e)
         return ext_did
 
-    # No external ID: recover the existing ID from the database first.
     try:
         conn = sqlite3.connect(get_db_path())
         row = conn.execute(
@@ -1742,7 +1737,6 @@ def get_device_id():
     except Exception as e:
         print("Device ID recovery warning:", e)
 
-    # Only generate a new ID when no prior ID can be recovered.
     did = uuid.uuid4().hex[:16].upper()
     _save_activation(did)
     try:
@@ -1763,7 +1757,6 @@ _ACTIVATION_CACHE_VALID = False
 
 
 def check_activation(device_id, code, hw_fp=None):
-    """Verify a license signed for this device's current fingerprint only."""
     global _ACTIVATION_CACHE_KEY, _ACTIVATION_CACHE_VALID
     if not code or not device_id:
         return False
@@ -1771,8 +1764,6 @@ def check_activation(device_id, code, hw_fp=None):
         return False
     try:
         current_fp = _hardware_fingerprint()
-        # Do not accept a caller-supplied/stale fingerprint instead of the
-        # fingerprint independently calculated by this installation.
         if not current_fp:
             return False
         did = device_id.strip().upper()
@@ -4292,7 +4283,6 @@ class AutoManagerApp(MDApp):
             pos_hint={"center_x": 0.5},
             on_release=on_activate))
 
-        # ⭐ هذا الجزء كان مفقوداً - وهو سبب عدم فتح النافذة
         self.upgrade_dialog = self.dlg(
             title="",
             type="custom",
@@ -5030,7 +5020,7 @@ class AutoManagerApp(MDApp):
                 c.execute("UPDATE contracts SET car_id=?, client_id=?, contract_price=?, paid_amount=?, remaining_amount=? WHERE id=?",
                           (car_id, client_id, price, paid, remaining, contract_id))
                 if old_car != car_id:
-                    c.execute("UPDATE cars SET status=1 WHERE id=? AND status=2", (old_car,))
+                    c.execute("UPDATE cars SET status=1 WHERE id=?", (old_car,))
                 c.execute("UPDATE cars SET status=2 WHERE id=?", (car_id,))
                 self.contract_edit_id = None
             else:
@@ -5466,7 +5456,8 @@ class AutoManagerApp(MDApp):
                   "/sdcard/Documents/ShowroomManager",
                   "/storage/emulated/0/Download",
                   "/storage/emulated/0/Documents",
-                  os.path.join(os.path.expanduser("~"), "Documents", "ShowroomManager" ), os.path.join(os.path.expanduser("~"), "ShowroomManager"),
+                  os.path.join(os.path.expanduser("~"), "Documents", "ShowroomManager"),
+                  os.path.join(os.path.expanduser("~"), "ShowroomManager"),
                   os.path.join(os.getcwd(), "ShowroomManager")):
             roots.append(r)
         dirs = []
@@ -5524,7 +5515,6 @@ class AutoManagerApp(MDApp):
         resolver = PythonActivity.mActivity.getContentResolver()
         max_bytes = 200 * 1024 * 1024
         too_big = "Backup file exceeds the 200 MB limit"
-        # رفض مبكر إذا أبلغ المزوّد عن حجم أكبر من الحد
         cursor = None
         try:
             OpenableColumns = autoclass('android.provider.OpenableColumns')
@@ -5541,7 +5531,6 @@ class AutoManagerApp(MDApp):
         outs = autoclass('java.io.FileOutputStream')(dest)
         ok = False
         try:
-            # حلقة نسخ كاملة (transferFrom قد ينسخ جزءاً فقط)
             Array = autoclass('java.lang.reflect.Array')
             ByteCls = autoclass('java.lang.Byte')
             buf = Array.newInstance(ByteCls.TYPE, 65536)
@@ -5680,7 +5669,6 @@ class AutoManagerApp(MDApp):
             if not {"cars", "clients", "contracts"} <= names:
                 self.notify(self.tr("invalid_backup"))
                 return
-            # النسخة المجانية: لا يُسمح باستيراد نسخة فيها أكثر من FREE_RESTORE_MAX
             if not self.is_premium():
                 bc = sqlite3.connect(path)
                 n_cars = bc.execute("SELECT COUNT(*) FROM cars").fetchone()[0]
@@ -5693,7 +5681,6 @@ class AutoManagerApp(MDApp):
                         c=n_cars, cl=n_cl, ct=n_ct, lim=FREE_RESTORE_MAX))
                     return
 
-            # ⭐ حفظ معرّف الجهاز الحالي ومفتاح التفعيل الحالي قبل الاسترداد
             old_device_id = get_device_id()
             old_license = self.get_setting("license_key")
 
@@ -5714,7 +5701,6 @@ class AutoManagerApp(MDApp):
                 except Exception as e:
                     print("premium settings strip error:", e)
 
-            # ⭐ إعادة كتابة معرّف الجهاز الحالي (وليس من النسخة) لمنع نقل التفعيل
             lc = sqlite3.connect(get_db_path())
             lc.execute("INSERT OR REPLACE INTO settings(key, value) VALUES('device_id', ?)",
                        (old_device_id,))
@@ -5725,9 +5711,7 @@ class AutoManagerApp(MDApp):
                 lc.execute("DELETE FROM settings WHERE key='license_key'")
             lc.commit()
             lc.close()
-            # ⭐ إعادة كتابة الملف الخارجي بعد الاسترداد
             _save_activation(old_device_id, old_license or "")
-            # ⭐ حذف أي بصمة قديمة قادمة من النسخة الاحتياطية
             try:
                 conn2 = sqlite3.connect(get_db_path())
                 conn2.execute("DELETE FROM settings WHERE key='hw_fingerprint'")
@@ -5750,7 +5734,6 @@ class AutoManagerApp(MDApp):
             print("do_restore error:", e)
             self.notify(self.tr("save_error"))
         finally:
-            # SAF imports use a temporary private copy; never delete the user's source backup.
             try:
                 temp_path = os.path.abspath(os.path.join(private_dir(), "restore_tmp.db"))
                 if os.path.abspath(path) == temp_path and os.path.isfile(temp_path):
@@ -6009,8 +5992,8 @@ class AutoManagerApp(MDApp):
         W, H = A4
         pdf_header(cv, fn, W, H, lang, company_info=ci)
         edge, al = pdf_edge(W, rtl)
-        cv.setFillColor(NAVY)
-        draw_text(cv, edge, H - 125, T["pay_title"], fn, 16, al)
+        # ⭐ عنوان أمر الدفع — لون ثابت + bold
+        draw_heading(cv, edge, H - 125, T["pay_title"], fn, 18, al)
         cv.setFillColor(colors.black)
         draw_text(cv, edge, H - 143, meta_line(T, rtl, cno, ds, ts), fn, 10, al)
         tables = [
@@ -6081,8 +6064,8 @@ class AutoManagerApp(MDApp):
         W, H = A4
         pdf_header(cv, fn, W, H, lang, company_info=ci)
         edge, al = pdf_edge(W, rtl)
-        cv.setFillColor(NAVY)
-        draw_text(cv, edge, H - 120, T["order_title"], fn, 15, al)
+        # ⭐ عنوان وصل الطلب — لون ثابت + bold
+        draw_heading(cv, edge, H - 120, T["order_title"], fn, 17, al)
         cv.setFillColor(colors.black)
         draw_text(cv, edge, H - 138, meta_line(T, rtl, cno, ds, ts), fn, 10, al)
         tables = [
@@ -6193,7 +6176,7 @@ class AutoManagerApp(MDApp):
             c.execute("SELECT car_id FROM contracts WHERE id=?", (contract_id,))
             row = c.fetchone()
             if row:
-                c.execute("UPDATE cars SET status=1 WHERE id=? AND status=2", (row[0],))
+                c.execute("UPDATE cars SET status=1 WHERE id=?", (row[0],))
             c.execute("DELETE FROM contracts WHERE id=?", (contract_id,))
             conn.commit()
             conn.close()
@@ -6240,8 +6223,8 @@ class AutoManagerApp(MDApp):
         edge, al = pdf_edge(W, rtl)
         footer = lambda: pdf_footer(cv, fn, W, lang, company_info=ci)
         pdf_header(cv, fn, W, H, lang, company_info=ci)
-        cv.setFillColor(NAVY)
-        draw_text(cv, edge, H - 118, T["canc_title"], fn, 14, al)
+        # ⭐ عنوان محضر الإلغاء — لون ثابت + bold
+        draw_heading(cv, edge, H - 118, T["canc_title"], fn, 16, al)
         cv.setFillColor(colors.black)
         draw_text(cv, edge, H - 136, meta_line(T, rtl, cno, ds, ts), fn, 10, al)
         cn = ci.get("name") or clean_text(T["company"])
@@ -6320,8 +6303,8 @@ class AutoManagerApp(MDApp):
                         ("Client", cn), ("Vehicule", car), ("VIN", cchassis), ("Prix", price))
 
         pdf_header(cpdf, fn, W, H, lang, logo=False, company_info=ci)
-        cpdf.setFillColor(NAVY)
-        draw_text(cpdf, edge, H - 115, T["contract_title"], fn, 14, al)
+        # ⭐ عنوان عقد الوساطة — لون ثابت + bold
+        draw_heading(cpdf, edge, H - 115, T["contract_title"], fn, 16, al)
         cpdf.setFillColor(colors.black)
         draw_text(cpdf, edge, H - 133, meta_line(T, rtl, cno, ds, ts), fn, 10, al)
         c_n = ci.get("name") or clean_text(T["company"])
@@ -6357,8 +6340,8 @@ class AutoManagerApp(MDApp):
         footer()
         cpdf.showPage()
 
-        cpdf.setFillColor(NAVY)
-        draw_text(cpdf, edge, H - 45, T["receipt_title"], fn, 13, al)
+        # ⭐ عنوان إيصال الدفع — لون ثابت + bold
+        draw_heading(cpdf, edge, H - 45, T["receipt_title"], fn, 15, al)
         cpdf.setFillColor(colors.black)
         draw_text(cpdf, edge, H - 63, meta_line(T, rtl, cno, ds, ts), fn, 10, al)
         tables = [
