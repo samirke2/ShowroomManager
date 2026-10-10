@@ -1367,7 +1367,6 @@ def pdf_edge(W, rtl):
 
 def pdf_header(cv, fn, W, H, lang, logo=True, company_info=None):
     T = PDF_TR[lang]
-    rtl = lang == "ar"
     cv.setFillColor(NAVY)
     cv.rect(0, H - 85, W, 85, fill=1, stroke=0)
     cv.setFillColor(GOLD)
@@ -1376,12 +1375,13 @@ def pdf_header(cv, fn, W, H, lang, logo=True, company_info=None):
         cv.setFillColor(colors.HexColor("#0B1F3A"))
     else:
         cv.setFillColor(colors.white)
-    edge, al = pdf_edge(W, rtl)
+    # ⭐ العنوان في المنتصف دائماً (في اللغتين)
+    center_x = W / 2.0
     if company_info and company_info.get("name"):
         comp_name = company_info["name"]
     else:
         comp_name = T["company"]
-    draw_text(cv, edge, H - 40, comp_name, fn, 18, al)
+    draw_text(cv, center_x, H - 40, comp_name, fn, 18, "center")
     if company_info:
         parts = []
         if company_info.get("rc"):
@@ -1393,7 +1393,7 @@ def pdf_header(cv, fn, W, H, lang, logo=True, company_info=None):
         info_line = "  |  ".join(parts) if parts else T["tagline"]
     else:
         info_line = T["tagline"]
-    draw_text(cv, edge, H - 62, info_line, fn, 10, al)
+    draw_text(cv, center_x, H - 62, info_line, fn, 10, "center")
     logo_path = None
     if company_info and company_info.get("logo") and os.path.exists(company_info["logo"]):
         logo_path = company_info["logo"]
@@ -1401,7 +1401,8 @@ def pdf_header(cv, fn, W, H, lang, logo=True, company_info=None):
         logo_path = LOGO_FILE
     if logo_path:
         try:
-            lx = 50 if rtl else W - 50 - 65
+            # ⭐ اللوغو دائماً على اليسار في اللغتين
+            lx = 50
             cv.drawImage(logo_path, lx, H - 80, 65, 65, mask="auto", preserveAspectRatio=True)
         except Exception:
             pass
@@ -5878,7 +5879,7 @@ class AutoManagerApp(MDApp):
                 f"[size=20][b]ShowroomManager[/b][/size]\n\n"
                 f"النسخة: {APP_VERSION} ({badge})\n\n"
                 "[b]المطوّر[/b]\nSamir Pyth_DZ\n\n"
-                "[b]التواصل[/b]\nهاتف: 0553762791\nبريد: kenefsamir0@gmail.com\n\n"
+                "[b]التواصل[/b]\nهاتف: 0553762791\nبريد: k9.samir76@gmail.com\n\n"
                 "[b]سياسة الخصوصية[/b]\n"
                 "هذا التطبيق لا يجمع أي بيانات شخصية.\n"
                 "جميع البيانات تُخزَّن محلياً على جهازك.\n\n"
@@ -5892,7 +5893,7 @@ class AutoManagerApp(MDApp):
                 f"[size=20][b]ShowroomManager[/b][/size]\n\n"
                 f"Version: {APP_VERSION} ({badge})\n\n"
                 "[b]Developpeur[/b]\nSamir Pyth_DZ\n\n"
-                "[b]Contact[/b]\nTel: +213 553 762 791\nEmail: kenefsamir0@gmail.com\n\n"
+                "[b]Contact[/b]\nTel: +213 553 762 791\nEmail: k9.samir76@gmail.com\n\n"
                 "[b]Confidentialite[/b]\n"
                 "Aucune donnee personnelle collectee.\n"
                 "Toutes les donnees sont locales.\n\n"
