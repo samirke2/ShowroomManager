@@ -668,7 +668,7 @@ def check_recovery_code(device_id, entered):
 DEFAULT_ARTICLES = {
     "ar": [
         {"title": "المادة 01: طرفي العقد",
-         "body": "الطرف الأول: {company}.\nالطرف الثاني (الزبون): {name}، الهوية: {nid}\nالميلاد: {birth}، العنوان: {address}"},
+         "body": "الطرف الأول: {company}.\nالطرف الثاني (الزبون): {name}، الهوية: {nid}\nالهاتف: {birth}، العنوان: {address}"},
         {"title": "المادة 02: موضوع العقد",
          "body": "تم الاتفاق بين الطرفين أن يقوم الطرف الأول بدور الوسيط التجاري لإتمام عملية بيع السيارة نوع: {car}، المسافة: {km} كلم.\nالنسخة: {trim}، اللون: {color}، علبة السرعة: {gearbox}.\nرقم التسجيل: {plate}، رقم الهيكل: {chassis}."},
         {"title": "المادة 03: الشروط المالية",
@@ -680,7 +680,7 @@ DEFAULT_ARTICLES = {
     ],
     "fr": [
         {"title": "Article 01 : Parties",
-         "body": "Première partie : {company}.\nDeuxième partie (le client) : {name}, piece d'identite N° : {nid}\nNe(e) le / a : {birth}, adresse : {address}"},
+         "body": "Première partie : {company}.\nDeuxième partie (le client) : {name}, NIN : {nid}\nN° Telephone : {birth}, adresse : {address}"},
         {"title": "Article 02 : Objet",
          "body": "Il est convenu que la premiere partie agit en qualite d'intermediaire commercial pour la vente du vehicule : {car}, kilometrage : {km} km.\nVersion : {trim}, couleur : {color}, Boite : {gearbox}.\nN° d'immatriculation : {plate}, N° de Chassis : {chassis}."},
         {"title": "Article 03 : Conditions financieres",
@@ -4799,13 +4799,13 @@ class AutoManagerApp(MDApp):
         if L == "ar":
             lines = [f"[size=17][b]{name}[/b][/size]",
                      f"رقم التعريف: {nid}",
-                     f"الميلاد: {birth}",
+                     f"رقم الهاتف {birth}",
                      f"العنوان: {address}", "",
                      f"[b]العقود ({len(contracts)})[/b]"]
         else:
             lines = [f"[size=17][b]{name}[/b][/size]",
                      f"NIN : {nid}",
-                     f"Naissance : {birth}",
+                     f"Telephone : {birth}",
                      f"Adresse : {address}", "",
                      f"[b]Contrats ({len(contracts)})[/b]"]
         for cid, date, price, paid, remaining, car, car_fr in contracts:
