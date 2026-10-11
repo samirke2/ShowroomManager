@@ -668,9 +668,9 @@ def check_recovery_code(device_id, entered):
 DEFAULT_ARTICLES = {
     "ar": [
         {"title": "المادة 01: طرفي العقد",
-         "body": "الطرف الأول: {company}.\nالطرف الثاني (الزبون): {name}، الهوية: {nid}\nالهاتف: {birth}، العنوان: {address}"},
+         "body": "الطرف الأول: {company}.\nالطرف الثاني (الزبون): {name}، رقم التعريف الوطني: {nid}\nالهاتف: {birth}، العنوان: {address}"},
         {"title": "المادة 02: موضوع العقد",
-         "body": "تم الاتفاق بين الطرفين أن يقوم الطرف الأول بدور الوسيط التجاري لإتمام عملية بيع السيارة نوع: {car}، المسافة: {km} كلم.\nالنسخة: {trim}، اللون: {color}، علبة السرعة: {gearbox}.\nرقم التسجيل: {plate}، رقم الهيكل: {chassis}."},
+         "body": "تم الاتفاق بين الطرفين أن يقوم الطرف الأول بدور الوسيط التجاري لإتمام إجراءات شراء السيارة نوع: {car}، المسافة: {km} كلم.\nالنسخة: {trim}، اللون: {color}، علبة السرعة: {gearbox}.\nرقم التسجيل: {plate}، رقم الهيكل: {chassis}."},
         {"title": "المادة 03: الشروط المالية",
          "body": "السعر الإجمالي المتفق عليه للسيارة هو: {price}. يلتزم الزبون بدفع المبلغ وفق الترتيبات المتفق عليها."},
         {"title": "المادة 04: الالتزامات",
@@ -682,7 +682,7 @@ DEFAULT_ARTICLES = {
         {"title": "Article 01 : Parties",
          "body": "Première partie : {company}.\nDeuxième partie (le client) : {name}, NIN : {nid}\nN° Telephone : {birth}, adresse : {address}"},
         {"title": "Article 02 : Objet",
-         "body": "Il est convenu que la premiere partie agit en qualite d'intermediaire commercial pour la vente du vehicule : {car}, kilometrage : {km} km.\nVersion : {trim}, couleur : {color}, Boite : {gearbox}.\nN° d'immatriculation : {plate}, N° de Chassis : {chassis}."},
+         "body": "Il est convenu que la premiere partie agit en qualite d'intermediaire commercial pour l'achat du vehicule : {car}, kilometrage : {km} km.\nVersion : {trim}, couleur : {color}, Boite : {gearbox}.\nN° d'immatriculation : {plate}, N° de Chassis : {chassis}."},
         {"title": "Article 03 : Conditions financieres",
          "body": "Le prix total convenu est de : {price}. Le client s'engage a regler ce montant selon les modalites convenues."},
         {"title": "Article 04 : Obligations",
@@ -1115,7 +1115,7 @@ PDF_TR = {
         "tagline": "لبيع وشراء السيارات والخدمات التجارية",
         "footer": "العنوان: رمضان جمال، سكيكدة، الجزائر",
         "default_client": "زبون", "default_city": "سكيكدة",
-        "contract_title": "عقد وساطة تجارية لشراء / بيع سيارة",
+        "contract_title": "عقد وساطة تجارية لشراء سيارة ",
         "receipt_title": "إيصال دفع مالي ومعاملة بيع",
         "order_title": "وصل طلب سيارة", "pay_title": "أمر بالدفع",
         "f_contract": "عقد وساطة", "f_order": "وصل طلب", "f_pay": "أمر بالدفع",
@@ -1139,9 +1139,9 @@ PDF_TR = {
         "l_price": "السعر الإجمالي", "l_paid": "المبلغ المدفوع (العربون)",
         "l_remaining": "المبلغ المتبقي",
         "id_note": "تجد في الصفحة الموالية نسخة من وثيقة هوية الزبون.",
-        "id_page": "وثيقة الهوية - {name}",
+        "id_page": "رقم التعريف الوطني - {name}",
         "canc_title": "محضر إلغاء عقد بالتراضي",
-        "canc_intro": "بتاريخ {when}، اجتمع الطرفان وهما بكامل الأهلية المعتبرة، واتفقا بالتراضي التام على إلغاء عقد الوساطة رقم {cid} المبرم بينهما وفق الشروط التالية:",
+        "canc_intro": "بتاريخ {when}، اجتمع الطرفان، واتفقا بالتراضي على إلغاء عقد الوساطة رقم {cid} المبرم بينهما وفق الشروط التالية:",
         "canc_a1_t": "المادة 01: الأطراف",
         "canc_a1_b": "الطرف الأول: {company}\nالطرف الثاني (الزبون): {name}، رقم التعريف: {nid}\nالعنوان: {address}",
         "canc_a2_t": "المادة 02: موضوع الإلغاء",
@@ -1271,7 +1271,6 @@ def draw_heading(cv, x, y, text, fn, size, align="left"):
     """عنوان داكِن دائم لا يتأثر بثيم الهيدر + محاكاة bold."""
     if HEADING_COLOR is not None:
         cv.setFillColor(HEADING_COLOR)
-    # محاكاة bold: رسم النص ثلاث مرات بإزاحة طفيفة
     for dx in (-0.5, 0.0, 0.5):
         draw_text(cv, x + dx, y, text, fn, size, align)
 
@@ -1375,7 +1374,6 @@ def pdf_header(cv, fn, W, H, lang, logo=True, company_info=None):
         cv.setFillColor(colors.HexColor("#0B1F3A"))
     else:
         cv.setFillColor(colors.white)
-    # ⭐ العنوان في المنتصف دائماً (في اللغتين)
     center_x = W / 2.0
     if company_info and company_info.get("name"):
         comp_name = company_info["name"]
@@ -1401,7 +1399,6 @@ def pdf_header(cv, fn, W, H, lang, logo=True, company_info=None):
         logo_path = LOGO_FILE
     if logo_path:
         try:
-            # ⭐ اللوغو دائماً على اليسار في اللغتين
             lx = 50
             cv.drawImage(logo_path, lx, H - 80, 65, 65, mask="auto", preserveAspectRatio=True)
         except Exception:
@@ -1805,6 +1802,7 @@ def check_activation(device_id, code, hw_fp=None):
         print("Verify error:", e)
         return False
 
+
 def is_activated():
     try:
         conn = sqlite3.connect(get_db_path())
@@ -1840,7 +1838,7 @@ ExceptionManager.add_handler(CrashHandler())
 
 
 # =====================================================================
-#  ArabicField
+#  ArabicField — للحقول أحادية السطر (الاسم، السعر، ...)
 # =====================================================================
 class ArabicField(MDTextField):
     def __init__(self, **kwargs):
@@ -1917,6 +1915,22 @@ class ArabicField(MDTextField):
     def set_logical(self, value):
         self._logical = value or ''
         self._refresh()
+
+
+# =====================================================================
+#  ArabicRawField — للتحرير المريح للنصوص الطويلة (بنود العقد)
+# =====================================================================
+class ArabicRawField(MDTextField):
+    """حقل نص عربي يسمح بالكتابة والتحرير الطبيعي (بدون تشكيل أثناء الكتابة).
+    النص المعروض = النص الخام، التشكيل يحدث عند الحفظ/العرض في القوائم."""
+    def __init__(self, **kwargs):
+        kwargs.setdefault('multiline', True)
+        kwargs.setdefault('halign', 'right')
+        super().__init__(**kwargs)
+        try:
+            self.base_direction = 'rtl'
+        except Exception as e:
+            print("base_direction unsupported:", e)
 
 
 def field_val(field):
@@ -3122,6 +3136,7 @@ class AutoManagerApp(MDApp):
     security_dialog = None
     recovery_dialog = None
     articles_dialog = None
+    article_edit_dialog = None
     _edited_articles = None
 
     def tr(self, key, lang=None):
@@ -3772,7 +3787,7 @@ class AutoManagerApp(MDApp):
             buttons=buttons)
         self.security_dialog.open()
 
-    # ========== محرر بنود العقد ==========
+    # ========== محرر بنود العقد (نسخة احترافية) ==========
     def show_articles_editor(self):
         from kivy.uix.scrollview import ScrollView
         from kivy.core.window import Window
@@ -3780,233 +3795,327 @@ class AutoManagerApp(MDApp):
         self._edited_articles = list(get_contract_articles(L))
 
         if L == "ar":
-            TXT_TITLE      = "بنود العقد (العربية)"
-            TXT_VARIABLES  = ("المتغيرات المتاحة: {name} {nid} {birth} {address} "
-                              "{car} {km} {trim} {color} {gearbox} {plate} "
-                              "{chassis} {price} {when} {company} {city}")
-            TXT_ADD        = "إضافة بند"
-            TXT_RESET      = "استرجاع الافتراضي"
-            TXT_EXPORT     = "تصدير ملف"
-            TXT_IMPORT     = "استيراد ملف"
-            TXT_SAVE       = "حفظ"
-            TXT_CANCEL     = "إلغاء"
-            TXT_DELETE     = "حذف"
-            TXT_TITLE_HINT = "عنوان البند"
-            TXT_BODY_HINT  = "نص البند"
-            TXT_IMPORTED   = "تم الاستيراد — اضغط حفظ"
-            TXT_INVALID    = "ملف غير صالح"
-            TXT_EXPORTED   = "تم التصدير"
-            TXT_RESET_DONE = "تم استرجاع الافتراضي — اضغط حفظ"
-            TXT_SAVED      = "تم حفظ بنود العقد"
-            TXT_SAVE_FAIL  = "فشل الحفظ"
-            TXT_NEW_TITLE  = "عنوان جديد"
-            TXT_NEW_BODY   = "نص المادة الجديدة..."
-            TXT_BAD_NUM    = "البند"
+            T = {
+                "title": "بنود العقد (العربية)",
+                "add": "إضافة بند",
+                "reset": "استرجاع الافتراضي",
+                "export": "تصدير CSV",
+                "import": "استيراد CSV",
+                "save": "حفظ",
+                "cancel": "إلغاء",
+                "edit": "تعديل",
+                "delete": "حذف",
+                "empty": "لا توجد بنود. اضغط «إضافة بند» للبدء.",
+                "article": "البند",
+                "hint": ("النص أثناء التحرير يظهر بحروف منفصلة (طبيعي). "
+                         "المعاينة داخل نافذة التعديل تُظهر الشكل النهائي."),
+            }
         else:
-            TXT_TITLE      = "Articles du contrat (Francais)"
-            TXT_VARIABLES  = ("Variables disponibles : {name} {nid} {birth} {address} "
-                              "{car} {km} {trim} {color} {gearbox} {plate} "
-                              "{chassis} {price} {when} {company} {city}")
-            TXT_ADD        = "Ajouter un article"
-            TXT_RESET      = "Restaurer le defaut"
-            TXT_EXPORT     = "Exporter un fichier"
-            TXT_IMPORT     = "Importer un fichier"
-            TXT_SAVE       = "Enregistrer"
-            TXT_CANCEL     = "Annuler"
-            TXT_DELETE     = "Supprimer"
-            TXT_TITLE_HINT = "Titre de l'article"
-            TXT_BODY_HINT  = "Texte de l'article"
-            TXT_IMPORTED   = "Importe - cliquez sur Enregistrer"
-            TXT_INVALID    = "Fichier invalide"
-            TXT_EXPORTED   = "Exporte"
-            TXT_RESET_DONE = "Defaut restaure - cliquez sur Enregistrer"
-            TXT_SAVED      = "Articles enregistres"
-            TXT_SAVE_FAIL  = "Echec de l'enregistrement"
-            TXT_NEW_TITLE  = "Nouveau titre"
-            TXT_NEW_BODY   = "Texte du nouvel article..."
-            TXT_BAD_NUM    = "Article"
+            T = {
+                "title": "Articles du contrat",
+                "add": "Ajouter",
+                "reset": "Restaurer",
+                "export": "Exporter CSV",
+                "import": "Importer CSV",
+                "save": "Enregistrer",
+                "cancel": "Annuler",
+                "edit": "Modifier",
+                "delete": "Supprimer",
+                "empty": "Aucun article.",
+                "article": "Article",
+                "hint": ("Le texte apparaît sans ligature pendant l'édition (normal). "
+                         "L'aperçu montre le rendu final."),
+            }
 
-        def _txt(s):
+        def _t(s):
             return self.ar(s) if L == "ar" else s
 
-        def build_editor():
-            container = MDBoxLayout(orientation="vertical", size_hint_y=None,
-                                    spacing=dp(12),
-                                    padding=[dp(8), dp(8), dp(8), dp(8)],
-                                    adaptive_height=True)
+        container = MDBoxLayout(orientation="vertical", size_hint_y=None,
+                                spacing=dp(10),
+                                padding=[dp(6), dp(6), dp(6), dp(6)],
+                                adaptive_height=True)
 
-            articles_box = MDBoxLayout(orientation="vertical", size_hint_y=None,
-                                       spacing=dp(10), adaptive_height=True)
-            container.add_widget(articles_box)
+        articles_box = MDBoxLayout(orientation="vertical", size_hint_y=None,
+                                   spacing=dp(8), adaptive_height=True)
+        container.add_widget(articles_box)
 
-            def refresh_list():
-                articles_box.clear_widgets()
-                for idx, art in enumerate(self._edited_articles):
-                    card = MDCard(orientation="vertical", size_hint_y=None,
-                                  adaptive_height=True, padding="10dp",
-                                  spacing="8dp", radius=[12], elevation=1,
-                                  md_bg_color=(0.98, 0.98, 1.0, 1))
+        def refresh_list():
+            articles_box.clear_widgets()
+            if not self._edited_articles:
+                lbl = MDLabel(text=_t(T["empty"]), halign="center",
+                              valign="middle", size_hint_y=None, height=dp(60),
+                              theme_text_color="Secondary", font_size="14sp")
+                articles_box.add_widget(lbl)
+                return
+            for idx, art in enumerate(self._edited_articles):
+                card = MDCard(orientation="vertical", size_hint_y=None,
+                              adaptive_height=True, padding=dp(10), spacing=dp(4),
+                              radius=[12], elevation=1,
+                              md_bg_color=(0.98, 0.98, 1.0, 1))
 
-                    head = MDBoxLayout(orientation="horizontal",
-                                       size_hint_y=None, height=dp(32),
-                                       spacing=dp(6))
-                    n_text = f"{TXT_BAD_NUM} {idx + 1}"
-                    head.add_widget(MDLabel(
-                        text=_txt(n_text),
-                        bold=True, font_size="13sp",
-                        halign="right" if L == "ar" else "left",
-                        theme_text_color="Custom",
-                        text_color=(0.08, 0.45, 0.75, 1)))
+                title_lbl = MDLabel(
+                    text=_t(f"{T['article']} {idx + 1}: ")
+                         + self.ar_markup(art.get("title", "")),
+                    markup=True,
+                    halign="right" if L == "ar" else "left",
+                    valign="top", size_hint_y=None,
+                    bold=True, font_size="14sp",
+                    theme_text_color="Custom",
+                    text_color=(0.08, 0.45, 0.75, 1))
+                title_lbl.bind(width=lambda i, w: setattr(i, "text_size", (w, None)))
+                title_lbl.bind(texture_size=lambda i, ts: setattr(i, "height", ts[1] + 4))
+                card.add_widget(title_lbl)
 
-                    btn_del = MDFlatButton(
-                        text=_txt(TXT_DELETE),
-                        text_color=(0.75, 0.22, 0.17, 1),
-                        size_hint_x=None, width=dp(90))
+                preview_txt = (art.get("body", "") or "").strip()
+                if len(preview_txt) > 120:
+                    preview_txt = preview_txt[:120] + "..."
+                body_lbl = MDLabel(
+                    text=self.ar_markup(preview_txt),
+                    markup=True,
+                    halign="right" if L == "ar" else "left",
+                    valign="top", size_hint_y=None,
+                    font_size="12sp",
+                    theme_text_color="Secondary")
+                body_lbl.bind(width=lambda i, w: setattr(i, "text_size", (w, None)))
+                body_lbl.bind(texture_size=lambda i, ts: setattr(i, "height", ts[1] + 4))
+                card.add_widget(body_lbl)
 
-                    def _del(_=None, i=idx):
-                        del self._edited_articles[i]
-                        refresh_list()
-                    btn_del.bind(on_release=_del)
-                    head.add_widget(btn_del)
-                    card.add_widget(head)
+                btns = MDBoxLayout(orientation="horizontal",
+                                   size_hint_y=None, height=dp(40),
+                                   spacing=dp(6))
+                btns.add_widget(MDFlatButton(
+                    text=_t(T["delete"]),
+                    text_color=(0.75, 0.22, 0.17, 1),
+                    on_release=lambda x, i=idx: self._article_delete(i, refresh_list)))
+                btns.add_widget(MDFlatButton(
+                    text=_t(T["edit"]),
+                    text_color=(0.08, 0.45, 0.75, 1),
+                    on_release=lambda x, i=idx: self._article_open_dialog(i, refresh_list)))
+                card.add_widget(btns)
 
-                    title_tf = ArabicField(
-                        mode="rectangle", font_size="14sp",
-                        hint_text=_txt(TXT_TITLE_HINT),
-                        size_hint_y=None, height=dp(52))
-                    set_field_val(title_tf, art.get("title", ""))
+                articles_box.add_widget(card)
 
-                    body_tf = ArabicField(
-                        mode="rectangle", font_size="13sp", multiline=True,
-                        hint_text=_txt(TXT_BODY_HINT),
-                        size_hint_y=None, height=dp(180))
-                    set_field_val(body_tf, art.get("body", ""))
+        refresh_list()
 
-                    def _sync_title(instance, _value, i=idx, tf=title_tf):
-                        if 0 <= i < len(self._edited_articles):
-                            self._edited_articles[i]["title"] = field_val(tf)
+        hint_lbl = MDLabel(text=_t(T["hint"]), halign="center",
+                           size_hint_y=None, height=dp(40),
+                           font_size="11sp", theme_text_color="Secondary")
+        hint_lbl.bind(width=lambda i, w: setattr(i, "text_size", (w, None)))
+        container.add_widget(hint_lbl)
 
-                    def _sync_body(instance, _value, i=idx, tf=body_tf):
-                        if 0 <= i < len(self._edited_articles):
-                            self._edited_articles[i]["body"] = field_val(tf)
+        row1 = MDBoxLayout(orientation="horizontal", size_hint_y=None,
+                           height=dp(48), spacing=dp(8))
+        row1.add_widget(MDRaisedButton(
+            text=_t(T["add"]), md_bg_color=(0.15, 0.55, 0.32, 1),
+            on_release=lambda x: self._article_open_dialog(None, refresh_list)))
+        row1.add_widget(MDRaisedButton(
+            text=_t(T["reset"]), md_bg_color=(0.95, 0.61, 0.07, 1),
+            on_release=lambda x: self._article_reset(refresh_list)))
+        container.add_widget(row1)
 
-                    title_tf.bind(text=_sync_title)
-                    body_tf.bind(text=_sync_body)
+        row2 = MDBoxLayout(orientation="horizontal", size_hint_y=None,
+                           height=dp(44), spacing=dp(8))
+        row2.add_widget(MDRaisedButton(
+            text=_t(T["export"]), md_bg_color=(0.55, 0.27, 0.68, 1),
+            on_release=lambda x: self._articles_export_csv()))
+        row2.add_widget(MDRaisedButton(
+            text=_t(T["import"]), md_bg_color=(0.0, 0.55, 0.62, 1),
+            on_release=lambda x: self._articles_import_csv(refresh_list)))
+        container.add_widget(row2)
 
-                    card.add_widget(title_tf)
-                    card.add_widget(body_tf)
-                    articles_box.add_widget(card)
-
-            def add_article(_=None):
-                n = len(self._edited_articles) + 1
-                if L == "ar":
-                    self._edited_articles.append({
-                        "title": f"المادة {n:02d}: {TXT_NEW_TITLE}",
-                        "body": TXT_NEW_BODY
-                    })
-                else:
-                    self._edited_articles.append({
-                        "title": f"Article {n:02d} : {TXT_NEW_TITLE}",
-                        "body": TXT_NEW_BODY
-                    })
-                refresh_list()
-
-            def reset_all(_=None):
-                self._edited_articles = [dict(a) for a in DEFAULT_ARTICLES[L]]
-                refresh_list()
-                self.notify(_txt(TXT_RESET_DONE))
-
-            def export_file(_=None):
-                try:
-                    d = csv_dir()
-                    ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-                    path = os.path.join(d, f"articles_{L}_{ts}.json")
-                    with open(path, "w", encoding="utf-8") as f:
-                        json.dump(self._edited_articles, f,
-                                  ensure_ascii=False, indent=2)
-                    self.notify(f"{_txt(TXT_EXPORTED)}: {os.path.basename(path)}")
-                except Exception as e:
-                    self.notify(f"Error: {str(e)[:40]}")
-
-            def import_file(_=None):
-                def _on_pick(filepath):
-                    try:
-                        with open(filepath, "r", encoding="utf-8") as f:
-                            data = json.load(f)
-                        if isinstance(data, list) and all(
-                                "title" in a and "body" in a for a in data):
-                            self._edited_articles = data
-                            refresh_list()
-                            self.notify(_txt(TXT_IMPORTED))
-                        else:
-                            self.notify(_txt(TXT_INVALID))
-                    except Exception as e:
-                        self.notify(f"Error: {str(e)[:40]}")
-
-                from kivymd.uix.filemanager import MDFileManager
-                start = ("/storage/emulated/0" if _kivy_platform == "android"
-                         else os.path.expanduser("~"))
-                fm = MDFileManager(
-                    exit_manager=lambda *a: fm.close(),
-                    select_path=lambda p: (_on_pick(p), fm.close()),
-                    ext=[".json"])
-                fm.show(start)
-
-            refresh_list()
-
-            btn_row = MDBoxLayout(orientation="horizontal", size_hint_y=None,
-                                  height=dp(48), spacing=dp(8))
-            btn_row.add_widget(MDRaisedButton(
-                text=_txt(TXT_ADD),
-                md_bg_color=(0.15, 0.55, 0.32, 1),
-                on_release=add_article))
-            btn_row.add_widget(MDRaisedButton(
-                text=_txt(TXT_RESET),
-                md_bg_color=(0.95, 0.61, 0.07, 1),
-                on_release=reset_all))
-            container.add_widget(btn_row)
-
-            file_row = MDBoxLayout(orientation="horizontal", size_hint_y=None,
-                                   height=dp(44), spacing=dp(8))
-            file_row.add_widget(MDRaisedButton(
-                text=_txt(TXT_EXPORT),
-                md_bg_color=(0.55, 0.27, 0.68, 1),
-                on_release=export_file))
-            file_row.add_widget(MDRaisedButton(
-                text=_txt(TXT_IMPORT),
-                md_bg_color=(0.0, 0.55, 0.62, 1),
-                on_release=import_file))
-            container.add_widget(file_row)
-
-            return container
-
-        content = build_editor()
         sv = ScrollView(size_hint_y=None, do_scroll_x=False)
-        sv.height = Window.height * 0.75
-        sv.add_widget(content)
+        sv.height = Window.height * 0.72
+        sv.add_widget(container)
         sv.scroll_y = 1
 
         def save_all(_=None):
-            ok = save_contract_articles(L, self._edited_articles)
-            if ok:
-                self.notify(_txt(TXT_SAVED))
+            if save_contract_articles(L, self._edited_articles):
+                self.notify(self.tr("saved_ok"))
                 self.articles_dialog.dismiss()
                 self.articles_dialog = None
             else:
-                self.notify(_txt(TXT_SAVE_FAIL))
+                self.notify(self.tr("save_error"))
 
         self.articles_dialog = self.dlg(
-            title=_txt(TXT_TITLE),
-            type="custom",
-            content_cls=sv,
+            title=_t(T["title"]), type="custom", content_cls=sv,
             buttons=[
-                MDFlatButton(text=_txt(TXT_CANCEL),
+                MDFlatButton(text=_t(T["cancel"]),
                              on_release=lambda x: self.articles_dialog.dismiss()),
-                MDRaisedButton(text=_txt(TXT_SAVE),
+                MDRaisedButton(text=_t(T["save"]),
                                md_bg_color=(0.08, 0.45, 0.75, 1),
                                on_release=save_all),
             ])
         self.articles_dialog.open()
+
+    # ---- دوال محرر البنود (جديدة) ----
+    def _article_delete(self, idx, refresh_cb):
+        if 0 <= idx < len(self._edited_articles):
+            del self._edited_articles[idx]
+            refresh_cb()
+
+    def _article_reset(self, refresh_cb):
+        L = self.current_lang
+        self._edited_articles = [dict(a) for a in DEFAULT_ARTICLES[L]]
+        refresh_cb()
+        self.notify(self.ar("تم استرجاع الافتراضي — اضغط حفظ")
+                    if L == "ar"
+                    else "Défauts restaurés — cliquez Enregistrer")
+
+    def _article_open_dialog(self, idx, refresh_cb):
+        L = self.current_lang
+        is_new = idx is None
+        new_article = ({"title": "", "body": ""} if is_new
+                       else dict(self._edited_articles[idx]))
+
+        if L == "ar":
+            TT, TB = "عنوان البند", "نص البند"
+            TP = "معاينة (الشكل النهائي):"
+            TH = ("تُعرض الحروف منفصلة أثناء الكتابة، "
+                  "وهذا طبيعي. المعاينة تُظهر النتيجة النهائية.")
+            DADD, DEDIT = "إضافة بند جديد", "تعديل البند"
+        else:
+            TT, TB = "Titre", "Texte"
+            TP = "Aperçu (rendu final) :"
+            TH = ("Les lettres apparaissent séparées pendant la saisie — normal. "
+                  "L'aperçu montre le rendu final.")
+            DADD, DEDIT = "Nouvel article", "Modifier l'article"
+
+        def _t(s):
+            return self.ar(s) if L == "ar" else s
+
+        box = MDBoxLayout(orientation="vertical", size_hint_y=None,
+                          spacing=dp(8), padding=dp(8), adaptive_height=True)
+
+        box.add_widget(MDLabel(
+            text=_t(TT), bold=True, size_hint_y=None, height=dp(22),
+            halign="right" if L == "ar" else "left",
+            theme_text_color="Custom", text_color=(0.08, 0.45, 0.75, 1)))
+        title_field = ArabicRawField(
+            mode="rectangle", font_size="15sp", multiline=False,
+            size_hint_y=None, height=dp(54),
+            text=new_article.get("title", ""))
+        box.add_widget(title_field)
+
+        box.add_widget(MDLabel(
+            text=_t(TB), bold=True, size_hint_y=None, height=dp(22),
+            halign="right" if L == "ar" else "left",
+            theme_text_color="Custom", text_color=(0.08, 0.45, 0.75, 1)))
+        body_field = ArabicRawField(
+            mode="rectangle", font_size="14sp", multiline=True,
+            size_hint_y=None, height=dp(180),
+            text=new_article.get("body", ""))
+        box.add_widget(body_field)
+
+        hint = MDLabel(text=_t(TH), size_hint_y=None, font_size="10sp",
+                       halign="center", theme_text_color="Secondary")
+        hint.bind(width=lambda i, w: setattr(i, "text_size", (w, None)))
+        hint.bind(texture_size=lambda i, ts: setattr(i, "height", ts[1] + 4))
+        box.add_widget(hint)
+
+        box.add_widget(MDLabel(
+            text=_t(TP), bold=True, size_hint_y=None, height=dp(22),
+            halign="right" if L == "ar" else "left",
+            theme_text_color="Custom", text_color=(0.08, 0.45, 0.75, 1)))
+        preview_lbl = MDLabel(text="", markup=True, size_hint_y=None,
+                              halign="right" if L == "ar" else "left",
+                              theme_text_color="Primary")
+        preview_lbl.bind(width=lambda i, w: setattr(i, "text_size", (w, None)))
+        preview_lbl.bind(texture_size=lambda i, ts: setattr(i, "height", ts[1] + 4))
+        box.add_widget(preview_lbl)
+
+        def update_preview(*_):
+            title_shaped = self.ar_markup(title_field.text or "")
+            body_shaped = self.ar_markup(body_field.text or "")
+            preview_lbl.text = f"[b]{title_shaped}[/b]\n{body_shaped}"
+        title_field.bind(text=update_preview)
+        body_field.bind(text=update_preview)
+        update_preview()
+
+        def on_save(_=None):
+            new_article["title"] = title_field.text or ""
+            new_article["body"] = body_field.text or ""
+            if is_new:
+                self._edited_articles.append(new_article)
+            else:
+                self._edited_articles[idx] = new_article
+            refresh_cb()
+            self.article_edit_dialog.dismiss()
+            self.article_edit_dialog = None
+
+        self.article_edit_dialog = self.dlg(
+            title=_t(DADD if is_new else DEDIT),
+            type="custom",
+            content_cls=self.wrap_dialog(box),
+            buttons=[
+                MDFlatButton(text=self.trd("cancel"),
+                             on_release=lambda x: self.article_edit_dialog.dismiss()),
+                MDRaisedButton(text=self.trd("save"),
+                               md_bg_color=(0.08, 0.45, 0.75, 1),
+                               on_release=on_save),
+            ])
+        self.article_edit_dialog.open()
+
+    def _articles_export_csv(self):
+        import csv
+        L = self.current_lang
+        try:
+            d = csv_dir()
+            ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"contract_articles_{L}_{ts}.csv"
+            path = os.path.join(d, filename)
+            with open(path, "w", newline="", encoding="utf-8-sig") as f:
+                w = csv.writer(f, quoting=csv.QUOTE_ALL)
+                w.writerow(["title", "body"])
+                for art in self._edited_articles:
+                    w.writerow([art.get("title", ""), art.get("body", "")])
+            self.notify((self.ar(f"تم التصدير: {filename}") if L == "ar"
+                         else f"Exporté : {filename}"))
+            return path
+        except Exception as e:
+            print("export csv error:", e)
+            self.notify(f"Error: {str(e)[:40]}")
+            return None
+
+    def _articles_import_csv(self, refresh_cb):
+        import csv
+        L = self.current_lang
+
+        def _on_pick(filepath):
+            try:
+                with open(filepath, "r", encoding="utf-8-sig") as f:
+                    rows = list(csv.reader(f))
+                if not rows:
+                    self.notify(self.ar("ملف فارغ") if L == "ar" else "Fichier vide")
+                    return
+                if rows[0] and str(rows[0][0]).strip().lower() == "title":
+                    rows = rows[1:]
+                articles = []
+                for row in rows:
+                    if not row:
+                        continue
+                    title = clean_text(row[0]).strip() if len(row) > 0 else ""
+                    body = clean_text(row[1]).strip() if len(row) > 1 else ""
+                    if title or body:
+                        articles.append({"title": title, "body": body})
+                if not articles:
+                    self.notify(self.ar("لا توجد بنود صالحة") if L == "ar"
+                                else "Aucun article valide")
+                    return
+                self._edited_articles = articles
+                refresh_cb()
+                self.notify((self.ar(f"تم استيراد {len(articles)} بند") if L == "ar"
+                             else f"{len(articles)} articles importés"))
+            except Exception as e:
+                print("import csv error:", e)
+                self.notify(f"Error: {str(e)[:40]}")
+
+        from kivymd.uix.filemanager import MDFileManager
+        start = "/storage/emulated/0" if _kivy_platform == "android" else os.path.expanduser("~")
+        fm = MDFileManager(
+            exit_manager=lambda *a: fm.close(),
+            select_path=lambda p: (_on_pick(p), fm.close()),
+            ext=[".csv"])
+        fm.show(start)
 
     # ========== رسالة الترحيب ==========
     def show_welcome_dialog(self):
@@ -4078,7 +4187,6 @@ class AutoManagerApp(MDApp):
         self.welcome_dialog.open()
 
     # ========== الترقية ==========
-    
     def show_upgrade_dialog(self, reason=""):
         if self.is_premium():
             self.notify(self.ar("التطبيق مفعّل بالفعل") if self.current_lang == "ar"
@@ -4290,9 +4398,8 @@ class AutoManagerApp(MDApp):
             content_cls=self.wrap_dialog(box),
             buttons=[MDFlatButton(text=self.trd("close"),
                                   on_release=lambda x: self.upgrade_dialog.dismiss())])
-        self.upgrade_dialog.open()    
-    
-    
+        self.upgrade_dialog.open()
+
     # ========== النسخ الاحتياطي ==========
     def backup_db(self, prefix="backup"):
         try:
@@ -5639,17 +5746,14 @@ class AutoManagerApp(MDApp):
                                     on_release=browse)])
         self.restore_list_dialog.open()
 
-    
     def _premium_settings_keys(self):
-        """مفاتيح الإعدادات المدفوعة (يجب حذفها عند استرداد مجاني)."""
         return (
             "company_name", "company_rc", "company_nif", "company_phone",
             "company_address", "company_address_fr", "company_city",
             "company_logo", "pdf_color",
             "bank_holder", "bank_name", "bank_agency", "bank_account",
         )
-    
-    
+
     def confirm_restore(self, path):
         self.restore_dialog = self.dlg(
             title=self.trd("restore_db"),
@@ -5993,7 +6097,6 @@ class AutoManagerApp(MDApp):
         W, H = A4
         pdf_header(cv, fn, W, H, lang, company_info=ci)
         edge, al = pdf_edge(W, rtl)
-        # ⭐ عنوان أمر الدفع — لون ثابت + bold
         draw_heading(cv, edge, H - 125, T["pay_title"], fn, 18, al)
         cv.setFillColor(colors.black)
         draw_text(cv, edge, H - 143, meta_line(T, rtl, cno, ds, ts), fn, 10, al)
@@ -6065,7 +6168,6 @@ class AutoManagerApp(MDApp):
         W, H = A4
         pdf_header(cv, fn, W, H, lang, company_info=ci)
         edge, al = pdf_edge(W, rtl)
-        # ⭐ عنوان وصل الطلب — لون ثابت + bold
         draw_heading(cv, edge, H - 120, T["order_title"], fn, 17, al)
         cv.setFillColor(colors.black)
         draw_text(cv, edge, H - 138, meta_line(T, rtl, cno, ds, ts), fn, 10, al)
@@ -6224,7 +6326,6 @@ class AutoManagerApp(MDApp):
         edge, al = pdf_edge(W, rtl)
         footer = lambda: pdf_footer(cv, fn, W, lang, company_info=ci)
         pdf_header(cv, fn, W, H, lang, company_info=ci)
-        # ⭐ عنوان محضر الإلغاء — لون ثابت + bold
         draw_heading(cv, edge, H - 118, T["canc_title"], fn, 16, al)
         cv.setFillColor(colors.black)
         draw_text(cv, edge, H - 136, meta_line(T, rtl, cno, ds, ts), fn, 10, al)
@@ -6304,7 +6405,6 @@ class AutoManagerApp(MDApp):
                         ("Client", cn), ("Vehicule", car), ("VIN", cchassis), ("Prix", price))
 
         pdf_header(cpdf, fn, W, H, lang, logo=False, company_info=ci)
-        # ⭐ عنوان عقد الوساطة — لون ثابت + bold
         draw_heading(cpdf, edge, H - 115, T["contract_title"], fn, 16, al)
         cpdf.setFillColor(colors.black)
         draw_text(cpdf, edge, H - 133, meta_line(T, rtl, cno, ds, ts), fn, 10, al)
@@ -6341,7 +6441,6 @@ class AutoManagerApp(MDApp):
         footer()
         cpdf.showPage()
 
-        # ⭐ عنوان إيصال الدفع — لون ثابت + bold
         draw_heading(cpdf, edge, H - 45, T["receipt_title"], fn, 15, al)
         cpdf.setFillColor(colors.black)
         draw_text(cpdf, edge, H - 63, meta_line(T, rtl, cno, ds, ts), fn, 10, al)
