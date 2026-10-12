@@ -3395,6 +3395,7 @@ class AutoManagerApp(MDApp):
     def build(self):
         from kivy.core.window import Window
         Window.clearcolor = (0.95, 0.96, 0.98, 1)
+        Window.softinput_mode = "below_target"
         request_android_permissions()
         self.theme_cls.theme_style = "Light"
         self.theme_cls.primary_palette = "Blue"
