@@ -1903,69 +1903,42 @@ class ArabicField(MDTextField):
         super().__init__(text='', **kwargs)
         Clock.schedule_once(lambda dt: self._refresh(), 0)
 
-    def on_focus(self, instance, value):
-        """عند استقبال التركيز، أعِد فتح الكيبورد بتأخير صغير."""
-        if value:
-            Clock.schedule_once(self._reopen_keyboard, 0.12)
-
-    def _reopen_keyboard(self, dt):
-        if not self.focus:
-            return
-        try:
-            from kivy.core.window import Window
-            Window.show_keyboard()
-        except Exception as e:
-            print("show_keyboard error:", e)
-
-    def on_touch_down(self, touch):
-        """اجبر التركيز عند اللمس لتجنّب فقدانه بين الحقول."""
-        if self.collide_point(*touch.pos) and not self.focus:
-            self.focus = True
-        return super().on_touch_down(touch)
-
-    def _refresh(self, cursor_pos=None):
+    def _refresh(self):
+        """يعرض النص بدون أي عمليات عبر Clock (لا cursor reset)."""
         self._updating = True
         try:
             txt = self._logical or ''
-            # الحقول الرقمية: عرض مباشر بدون تشكيل
             if self.input_filter in ("int", "float"):
-                self.text = txt
+                new_text = txt
             elif txt and is_arabic(txt):
                 lines = txt.split('\n')
-                reshaped_lines = []
+                out_lines = []
                 for line in lines:
                     if not line:
-                        reshaped_lines.append('')
+                        out_lines.append('')
                         continue
                     if is_arabic(line):
                         try:
                             shaped = arabic_reshaper.reshape(clean_text(line))
-                            reshaped_lines.append(get_display(shaped, base_dir='R'))
+                            out_lines.append(get_display(shaped, base_dir='R'))
                         except Exception:
-                            reshaped_lines.append(line)
+                            out_lines.append(line)
                     else:
-                        reshaped_lines.append(line)
-                self.text = '\n'.join(reshaped_lines)
+                        out_lines.append(line)
+                new_text = '\n'.join(out_lines)
             else:
-                self.text = txt
-        except Exception:
-            pass
+                new_text = txt
+            if self.text != new_text:
+                self.text = new_text
+        except Exception as e:
+            print("refresh error:", e)
         finally:
             self._updating = False
-        pos = len(self.text) if cursor_pos is None else cursor_pos
-        Clock.schedule_once(lambda dt: self._set_cursor(pos), 0)
-
-    def _set_cursor(self, pos):
-        try:
-            self.cursor = (min(pos, len(self.text)), 0)
-        except Exception:
-            pass
 
     def insert_text(self, substring, from_undo=False):
         if self._updating:
             return
         sub = substring or ''
-        # فلترة صارمة للحقول الرقمية
         if self.input_filter == 'int':
             sub = ''.join(c for c in sub if c.isdigit())
         elif self.input_filter == 'float':
@@ -1994,7 +1967,6 @@ class ArabicField(MDTextField):
     def set_logical(self, value):
         self._logical = value or ''
         self._refresh()
-
 
 # =====================================================================
 #  ArabicRawField — للتحرير المريح للنصوص الطويلة
@@ -3449,7 +3421,7 @@ class AutoManagerApp(MDApp):
             # إصلاح مشكلة الكيبورد على Android
             try:
                 from kivy.core.window import Window
-                Window.softinput_mode = "pan"
+                Window.softinput_mode = "resize"
             except Exception as _e:
                 print("softinput_mode error:", _e)
 
