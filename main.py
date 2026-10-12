@@ -1904,7 +1904,15 @@ class ArabicField(MDTextField):
         self._updating = False
         super().__init__(text='', **kwargs)
         Clock.schedule_once(lambda dt: self._refresh(), 0)
-
+        
+        
+    def on_touch_down(self, touch):
+        if self.collide_point(*touch.pos):
+            # نجبر التركيز على الانتقال للحقل الملموس
+            Clock.schedule_once(lambda dt: setattr(self, "focus", True), 0.05)
+        return super().on_touch_down(touch)
+    
+    
     def _refresh(self, cursor_pos=None):
         self._updating = True
         try:
