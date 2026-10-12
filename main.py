@@ -310,6 +310,64 @@ def ar_lines(text, max_chars=40):
 
 
 # =====================================================================
+#  فك تشكيل العربية (لإشعارات Android)
+# =====================================================================
+_PRESENTATION_TO_BASE = {}
+
+
+def _build_presentation_map():
+    """يبني خريطة من صور العرض (U+FB50..U+FEFF) إلى الحروف الأساسية."""
+    global _PRESENTATION_TO_BASE
+    if _PRESENTATION_TO_BASE:
+        return
+    try:
+        for cp in range(0xFB50, 0xFEFF + 1):
+            ch = chr(cp)
+            try:
+                decomp = unicodedata.decomposition(ch)
+            except Exception:
+                continue
+            if not decomp or decomp.startswith('<'):
+                continue
+            first = decomp.split()[0]
+            try:
+                base = chr(int(first, 16))
+            except Exception:
+                continue
+            _PRESENTATION_TO_BASE[ch] = base
+    except Exception as e:
+        print("presentation map error:", e)
+
+
+_build_presentation_map()
+
+
+def _deshape_ar(text):
+    """يفك أثر ar() لإشعارات Android."""
+    if not text:
+        return text
+    try:
+        has_pres = any(
+            (0xFB50 <= ord(c) <= 0xFDFF) or (0xFE70 <= ord(c) <= 0xFEFF)
+            for c in text
+        )
+        if not has_pres:
+            return text
+    except Exception:
+        return text
+    try:
+        from bidi.algorithm import get_display as _gd
+        logical = _gd(text, base_dir='R')
+        out = []
+        for ch in logical:
+            out.append(_PRESENTATION_TO_BASE.get(ch, ch))
+        return "".join(out)
+    except Exception as e:
+        print("deshape_ar error:", e)
+        return text
+
+
+# =====================================================================
 #  مسارات التخزين
 # =====================================================================
 _APP_ROOT = None
@@ -1268,7 +1326,6 @@ def draw_text(cv, x, y, text, fn, size, align="left"):
 
 
 def draw_heading(cv, x, y, text, fn, size, align="left"):
-    """عنوان داكِن دائم لا يتأثر بثيم الهيدر + محاكاة bold."""
     if HEADING_COLOR is not None:
         cv.setFillColor(HEADING_COLOR)
     for dx in (-0.5, 0.0, 0.5):
@@ -3306,7 +3363,9 @@ class AutoManagerApp(MDApp):
 
     def notify(self, text):
         msg = clean_text(text)
-        if not IS_ANDROID:
+        if IS_ANDROID:
+            msg = _deshape_ar(msg)
+        else:
             msg = ar(msg)
         toast(msg)
 
@@ -3413,7 +3472,7 @@ class AutoManagerApp(MDApp):
             except Exception:
                 pass
 
-    # ========== شاشة القفل PIN (مُحسّنة: بدون سكرول) ==========
+    # ========== شاشة القفل PIN ==========
     def show_lock_screen(self):
         L = self.current_lang
         title_txt = (self.ar("أدخل كلمة السر للدخول") if L == "ar"
@@ -5698,9 +5757,22 @@ class AutoManagerApp(MDApp):
                 try:
                     dest = os.path.join(private_dir(), "restore_tmp.db")
                     self._copy_uri_to_file(data.getData(), dest)
+
+                    if not os.path.isfile(dest):
+                        raise ValueError("File missing after copy")
+                    size = os.path.getsize(dest)
+                    if size < 100:
+                        raise ValueError(f"Copied file too small ({size} bytes)")
+                    with open(dest, "rb") as f:
+                        hdr = f.read(16)
+                    if not hdr.startswith(b"SQLite format 3\x00"):
+                        raise ValueError("Copied file is not a valid SQLite database")
                 except Exception as e:
                     print("pick backup error:", e)
-                    Clock.schedule_once(lambda dt: self.notify(self.tr("save_error")))
+                    msg = (f"فشل نسخ النسخة الاحتياطية: {str(e)[:50]}"
+                           if self.current_lang == "ar"
+                           else f"Backup copy failed: {str(e)[:50]}")
+                    Clock.schedule_once(lambda dt, m=msg: self.notify(m))
                     return
                 Clock.schedule_once(lambda dt: self.confirm_restore(dest))
 
@@ -5779,9 +5851,9 @@ class AutoManagerApp(MDApp):
                                   on_release=lambda x: self.do_restore(path))])
         self.restore_dialog.open()
 
-    # ========== الاسترجاع المُحصّن (يعمل بعد إعادة التثبيت) ==========
+    # ========== الاسترجاع المُحصّن ==========
     def do_restore(self, path):
-        """استرجاع احترافي: نسخ إلى ملف مؤقت، تحقّق، ثم استبدال ذرّي."""
+        """استرجاع احترافي: تحقق من الترويسة، نسخ مؤقت، ثم استبدال ذرّي."""
         if self.restore_dialog:
             self.restore_dialog.dismiss()
             self.restore_dialog = None
@@ -5791,11 +5863,11 @@ class AutoManagerApp(MDApp):
         # ============ 1) تحقّق من الملف المصدر ============
         try:
             if not path or not os.path.isfile(path):
-                self.notify(self.ar("الملف غير موجود") if L == "ar"
+                self.notify("الملف غير موجود" if L == "ar"
                             else "Backup file not found")
                 return
             if os.path.getsize(path) < 100:
-                self.notify(self.ar("الملف فارغ أو تالف") if L == "ar"
+                self.notify("الملف فارغ أو تالف" if L == "ar"
                             else "File is empty or corrupted")
                 return
         except Exception as e:
@@ -5803,16 +5875,31 @@ class AutoManagerApp(MDApp):
             self.notify(f"Error: {str(e)[:50]}")
             return
 
-        # ============ 2) تحقّق أنه SQLite صالح ============
+        # ============ 2) تحقّق أنه SQLite صالح (ترويسة أولاً) ============
         try:
-            chk = sqlite3.connect(path)
-            names = {r[0] for r in chk.execute(
-                "SELECT name FROM sqlite_master WHERE type='table'")}
-            chk.close()
+            with open(path, "rb") as f:
+                header = f.read(16)
+            if not header or not header.startswith(b"SQLite format 3\x00"):
+                self.notify(
+                    self.tr("invalid_backup")
+                    if self.current_lang == "ar"
+                    else "Not a valid SQLite file (bad header)"
+                )
+                return
+
+            chk = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+            try:
+                names = {r[0] for r in chk.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table'")}
+            finally:
+                chk.close()
         except Exception as e:
             print("validate sqlite error:", e)
-            self.notify(self.ar("الملف ليس قاعدة بيانات صالحة") if L == "ar"
-                        else "Not a valid SQLite database")
+            self.notify(
+                f"الملف ليس قاعدة بيانات صالحة: {str(e)[:50]}"
+                if self.current_lang == "ar"
+                else f"Not a valid SQLite database: {str(e)[:50]}"
+            )
             return
 
         if not {"cars", "clients", "contracts"} <= names:
@@ -5822,7 +5909,7 @@ class AutoManagerApp(MDApp):
         # ============ 3) حدود النسخة المجانية ============
         if not self.is_premium():
             try:
-                bc = sqlite3.connect(path)
+                bc = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
                 n_cars = bc.execute("SELECT COUNT(*) FROM cars").fetchone()[0]
                 n_cl = bc.execute("SELECT COUNT(*) FROM clients").fetchone()[0]
                 n_ct = bc.execute("SELECT COUNT(*) FROM contracts").fetchone()[0]
@@ -5862,13 +5949,12 @@ class AutoManagerApp(MDApp):
             os.makedirs(db_directory, exist_ok=True)
         except Exception as e:
             print("mkdir db dir error:", e)
-            self.notify(self.ar("فشل إنشاء مجلد قاعدة البيانات") if L == "ar"
+            self.notify("فشل إنشاء مجلد قاعدة البيانات" if L == "ar"
                         else "Cannot create database directory")
             return
 
         # ============ 7) انسخ المصدر إلى ملف مؤقت ============
         temp_db = current_db + ".restore_tmp"
-
         try:
             if os.path.exists(temp_db):
                 try:
@@ -5876,7 +5962,7 @@ class AutoManagerApp(MDApp):
                 except Exception:
                     pass
 
-            src = sqlite3.connect(path)
+            src = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
             tmp = sqlite3.connect(temp_db)
             src.backup(tmp)
             tmp.close()
@@ -5895,7 +5981,7 @@ class AutoManagerApp(MDApp):
                     os.remove(temp_db)
             except Exception:
                 pass
-            self.notify(self.ar(f"فشل النسخ: {str(e)[:60]}") if L == "ar"
+            self.notify(f"فشل النسخ: {str(e)[:60]}" if L == "ar"
                         else f"Copy failed: {str(e)[:60]}")
             return
 
@@ -5911,7 +5997,7 @@ class AutoManagerApp(MDApp):
                     os.remove(temp_db)
             except Exception:
                 pass
-            self.notify(self.ar(f"فشل التبديل: {str(e)[:60]}") if L == "ar"
+            self.notify(f"فشل التبديل: {str(e)[:60]}" if L == "ar"
                         else f"Swap failed: {str(e)[:60]}")
             return
 
@@ -5921,7 +6007,6 @@ class AutoManagerApp(MDApp):
         except Exception as e:
             print("init_db after restore error:", e)
 
-        # احذف إعدادات الشركة/البنك إن كان مجانياً
         if not self.is_premium():
             try:
                 cc = sqlite3.connect(current_db)
@@ -5932,7 +6017,6 @@ class AutoManagerApp(MDApp):
             except Exception as e:
                 print("strip premium error:", e)
 
-        # أعد كتابة هوية الجهاز
         try:
             lc = sqlite3.connect(current_db)
             if old_device_id:
@@ -5951,13 +6035,11 @@ class AutoManagerApp(MDApp):
         except Exception as e:
             print("rewrite identity error:", e)
 
-        # أعد كتابة ملفات التفعيل الخارجية
         try:
             _save_activation(old_device_id or "", old_license or "")
         except Exception as e:
             print("save_activation error:", e)
 
-        # أعد تحميل كل شيء
         try:
             self.load_all_data()
             self.load_settings()
@@ -5971,7 +6053,6 @@ class AutoManagerApp(MDApp):
 
         self.notify(self.tr("db_restore_success"))
 
-        # تنظيف ملف SAF المؤقت
         try:
             temp_saf = os.path.abspath(os.path.join(private_dir(), "restore_tmp.db"))
             if os.path.abspath(path) == temp_saf and os.path.isfile(temp_saf):
