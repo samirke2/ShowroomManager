@@ -5691,50 +5691,81 @@ class AutoManagerApp(MDApp):
         self.open_file_manager("restore", [], self.tr("pick_backup_file"), browse_dir)
 
     def _copy_uri_to_file(self, uri, dest):
+        """نسخ ملف من content:// URI إلى مسار محلي — نسخة محصّنة لـAndroid 12+."""
         from jnius import autoclass
         PythonActivity = autoclass('org.kivy.android.PythonActivity')
         resolver = PythonActivity.mActivity.getContentResolver()
         max_bytes = 200 * 1024 * 1024
-        too_big = "Backup file exceeds the 200 MB limit"
-        cursor = None
+
+        # 1) محاولة قراءة الحجم (اختياري)
         try:
-            OpenableColumns = autoclass('android.provider.OpenableColumns')
-            cursor = resolver.query(uri, [OpenableColumns.SIZE], None, None, None)
-            if cursor is not None and cursor.moveToFirst():
-                size_col = cursor.getColumnIndex(OpenableColumns.SIZE)
-                if size_col >= 0 and int(cursor.getLong(size_col)) > max_bytes:
-                    raise ValueError(too_big)
-        finally:
+            cursor = resolver.query(uri, None, None, None, None)
             if cursor is not None:
-                try: cursor.close()
-                except Exception: pass
-        ins = resolver.openInputStream(uri)
-        outs = autoclass('java.io.FileOutputStream')(dest)
+                try:
+                    if cursor.moveToFirst():
+                        idx = cursor.getColumnIndex("_size")
+                        if idx >= 0:
+                            size = int(cursor.getLong(idx))
+                            if size > max_bytes:
+                                raise ValueError(
+                                    f"File too large: {size} bytes")
+                finally:
+                    try: cursor.close()
+                    except Exception: pass
+        except ValueError:
+            raise
+        except Exception as e:
+            print("size check skipped:", e)
+
+        # 2) نسخ عبر file descriptor (بدون مصفوفات Java)
+        pfd = None
+        try:
+            pfd = resolver.openFileDescriptor(uri, "r")
+        except Exception as e:
+            raise ValueError(f"Cannot open source: {str(e)[:40]}")
+
+        if pfd is None:
+            raise ValueError("Cannot open source file")
+
+        fd_in = pfd.detachFd()
+
+        # احذف الوجهة القديمة إن وُجدت
+        try:
+            if os.path.exists(dest):
+                os.remove(dest)
+        except Exception:
+            pass
+
+        try:
+            fd_out = os.open(dest, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        except Exception as e:
+            try: os.close(fd_in)
+            except Exception: pass
+            raise ValueError(f"Cannot create dest: {str(e)[:40]}")
+
+        total = 0
         ok = False
         try:
-            Array = autoclass('java.lang.reflect.Array')
-            ByteCls = autoclass('java.lang.Byte')
-            buf = Array.newInstance(ByteCls.TYPE, 65536)
-            total = 0
             while True:
-                n = ins.read(buf)
-                if n < 0:
+                chunk = os.read(fd_in, 65536)
+                if not chunk:
                     break
-                if n == 0:
-                    continue
-                total += n
+                total += len(chunk)
                 if total > max_bytes:
-                    raise ValueError(too_big)
-                outs.write(buf, 0, n)
+                    raise ValueError(f"File exceeds {max_bytes} bytes")
+                os.write(fd_out, chunk)
             ok = True
         finally:
-            try: outs.close()
+            try: os.close(fd_out)
             except Exception: pass
-            try: ins.close()
+            try: os.close(fd_in)
             except Exception: pass
             if not ok:
-                try: os.remove(dest)
-                except Exception: pass
+                try:
+                    if os.path.exists(dest):
+                        os.remove(dest)
+                except Exception:
+                    pass
 
     def _android_pick_backup(self):
         try:
