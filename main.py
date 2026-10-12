@@ -1874,6 +1874,58 @@ def is_activated():
 
 
 # =====================================================================
+#  إصلاح الكيبورد عند الانتقال بين الحقول (Android / SDL2)
+# =====================================================================
+def install_keyboard_fix():
+    """عند نقل التركيز من حقل لآخر يستدعي Kivy hide ثم show في نفس اللحظة،
+    فيبقى الكيبورد مغلقاً. هنا نؤخّر الإظهار قليلاً بعد الإخفاء."""
+    try:
+        if _kivy_platform != "android":
+            return
+        from kivy.core.window import Window, WindowBase
+        if getattr(Window, "_dz_kb_fix", False) or not hasattr(Window, "_win"):
+            return
+        orig_request = Window.request_keyboard
+
+        def request(callback, target, input_type='text', keyboard_suggestions=True):
+            sk = getattr(Window, "_system_keyboard", None)
+            switching = sk is not None and getattr(sk, "callback", None) is not None
+            if not switching:
+                return orig_request(callback, target, input_type, keyboard_suggestions)
+            try:
+                kb = WindowBase.request_keyboard(
+                    Window, callback, target, input_type, keyboard_suggestions)
+            except Exception as e:
+                print("kb switch error:", e)
+                return orig_request(callback, target, input_type, keyboard_suggestions)
+
+            def _show(dt):
+                try:
+                    skb = Window._system_keyboard
+                    if skb is None or skb.target is not target:
+                        return
+                    Window._sdl_keyboard = skb
+                    Window._win.show_keyboard(skb, Window.softinput_mode,
+                                              input_type, keyboard_suggestions)
+                    try:
+                        Clock.unschedule(Window._check_keyboard_shown)
+                    except Exception:
+                        pass
+                    Clock.schedule_interval(Window._check_keyboard_shown, 1 / 5.)
+                except Exception as e2:
+                    print("kb show error:", e2)
+
+            Clock.schedule_once(_show, 0.15)
+            return kb
+
+        Window.request_keyboard = request
+        Window._dz_kb_fix = True
+        print("✓ keyboard fix installed")
+    except Exception as e:
+        print("install_keyboard_fix error:", e)
+
+
+# =====================================================================
 #  معالج الأعطال
 # =====================================================================
 class CrashHandler(ExceptionHandler):
@@ -1903,42 +1955,56 @@ class ArabicField(MDTextField):
         super().__init__(text='', **kwargs)
         Clock.schedule_once(lambda dt: self._refresh(), 0)
 
-    def _refresh(self):
-        """يعرض النص بدون أي عمليات عبر Clock (لا cursor reset)."""
+    def on_input_filter(self, instance, value):
+        """الحقول الرقمية تفتح لوحة أرقام فقط."""
+        try:
+            self.input_type = 'number' if value in ('int', 'float') else 'text'
+        except Exception:
+            pass
+
+    def _refresh(self, cursor_pos=None):
         self._updating = True
         try:
             txt = self._logical or ''
+            # الحقول الرقمية: عرض مباشر بدون تشكيل
             if self.input_filter in ("int", "float"):
-                new_text = txt
+                self.text = txt
             elif txt and is_arabic(txt):
                 lines = txt.split('\n')
-                out_lines = []
+                reshaped_lines = []
                 for line in lines:
                     if not line:
-                        out_lines.append('')
+                        reshaped_lines.append('')
                         continue
                     if is_arabic(line):
                         try:
                             shaped = arabic_reshaper.reshape(clean_text(line))
-                            out_lines.append(get_display(shaped, base_dir='R'))
+                            reshaped_lines.append(get_display(shaped, base_dir='R'))
                         except Exception:
-                            out_lines.append(line)
+                            reshaped_lines.append(line)
                     else:
-                        out_lines.append(line)
-                new_text = '\n'.join(out_lines)
+                        reshaped_lines.append(line)
+                self.text = '\n'.join(reshaped_lines)
             else:
-                new_text = txt
-            if self.text != new_text:
-                self.text = new_text
-        except Exception as e:
-            print("refresh error:", e)
+                self.text = txt
+        except Exception:
+            pass
         finally:
             self._updating = False
+        pos = len(self.text) if cursor_pos is None else cursor_pos
+        Clock.schedule_once(lambda dt: self._set_cursor(pos), 0)
+
+    def _set_cursor(self, pos):
+        try:
+            self.cursor = (min(pos, len(self.text)), 0)
+        except Exception:
+            pass
 
     def insert_text(self, substring, from_undo=False):
         if self._updating:
             return
         sub = substring or ''
+        # فلترة صارمة للحقول الرقمية
         if self.input_filter == 'int':
             sub = ''.join(c for c in sub if c.isdigit())
         elif self.input_filter == 'float':
@@ -1967,6 +2033,7 @@ class ArabicField(MDTextField):
     def set_logical(self, value):
         self._logical = value or ''
         self._refresh()
+
 
 # =====================================================================
 #  ArabicRawField — للتحرير المريح للنصوص الطويلة
@@ -3421,9 +3488,10 @@ class AutoManagerApp(MDApp):
             # إصلاح مشكلة الكيبورد على Android
             try:
                 from kivy.core.window import Window
-                Window.softinput_mode = "resize"
+                Window.softinput_mode = "pan"
             except Exception as _e:
                 print("softinput_mode error:", _e)
+            install_keyboard_fix()
 
             self.load_settings()
             self.refresh_app_logo()
@@ -3502,7 +3570,7 @@ class AutoManagerApp(MDApp):
         pin_field = MDTextField(
             mode="rectangle", font_size="24sp",
             password=True, halign="center",
-            icon_left="lock", input_filter="int",
+            icon_left="lock", input_filter="int", input_type="number",
             size_hint_y=None, height=dp(60))
         box.add_widget(pin_field)
 
@@ -3789,7 +3857,7 @@ class AutoManagerApp(MDApp):
                                    text_color=(0.08, 0.45, 0.75, 1)))
             old_pin = MDTextField(mode="rectangle", font_size="18sp",
                                   password=True, halign="center",
-                                  input_filter="int", icon_left="lock")
+                                  input_filter="int", input_type="number", icon_left="lock")
             box.add_widget(old_pin)
 
         box.add_widget(MDLabel(text=_txt(T_NEW),
@@ -3800,7 +3868,7 @@ class AutoManagerApp(MDApp):
                                text_color=(0.08, 0.45, 0.75, 1)))
         new_pin = MDTextField(mode="rectangle", font_size="18sp",
                               password=True, halign="center",
-                              input_filter="int", icon_left="key")
+                              input_filter="int", input_type="number", icon_left="key")
         box.add_widget(new_pin)
 
         box.add_widget(MDLabel(text=_txt(T_CONFIRM),
@@ -3811,7 +3879,7 @@ class AutoManagerApp(MDApp):
                                text_color=(0.08, 0.45, 0.75, 1)))
         confirm_pin = MDTextField(mode="rectangle", font_size="18sp",
                                   password=True, halign="center",
-                                  input_filter="int", icon_left="key-check")
+                                  input_filter="int", input_type="number", icon_left="key-check")
         box.add_widget(confirm_pin)
 
         def save_pin(_=None):
@@ -5410,7 +5478,8 @@ class AutoManagerApp(MDApp):
                 halign="right" if L == "ar" else "left",
                 theme_text_color="Custom", text_color=(0.08, 0.45, 0.75, 1)))
             tf = ArabicField(mode="rectangle", font_size="16sp",
-                             size_hint_y=None, height=dp(54))
+                             size_hint_y=None, height=dp(54),
+                             **({"input_filter": "int"} if key == "bank_account" else {}))
             set_field_val(tf, self.get_setting(key))
             box.add_widget(tf)
             fields.append((key, tf))
@@ -5521,7 +5590,8 @@ class AutoManagerApp(MDApp):
                 size_hint_y=None, height=dp(18), font_size="13sp",
                 halign="right" if L == "ar" else "left",
                 theme_text_color="Custom", text_color=(0.08, 0.45, 0.75, 1)))
-            tf = ArabicField(mode="rectangle", font_size="15sp", size_hint_y=None, height=dp(46))
+            tf = ArabicField(mode="rectangle", font_size="15sp", size_hint_y=None, height=dp(46),
+                             **({"input_filter": "int"} if key == "company_phone" else {}))
             set_field_val(tf, self.get_setting(key))
             box.add_widget(tf)
             fields.append((key, tf))
