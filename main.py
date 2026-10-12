@@ -316,7 +316,6 @@ _PRESENTATION_TO_BASE = {}
 
 
 def _build_presentation_map():
-    """يبني خريطة من صور العرض (U+FB50..U+FEFF) إلى الحروف الأساسية."""
     global _PRESENTATION_TO_BASE
     if _PRESENTATION_TO_BASE:
         return
@@ -343,7 +342,6 @@ _build_presentation_map()
 
 
 def _deshape_ar(text):
-    """يفك أثر ar() لإشعارات Android."""
     if not text:
         return text
     try:
@@ -792,10 +790,10 @@ TRANSLATIONS = {
         "car_name_fr_hint": "اسم السيارة بالفرنسية",
         "client_name_fr_hint": "الاسم واللقب بالفرنسية",
         "mileage_hint": "المسافة المقطوعة (كلم)",
-        "price_hint": "السعر (مثال: 350 مليون)",
+        "price_hint": "السعر (مثال: 350)",
         "trim_hint": "النسخة (Version)", "color_hint": "اللون",
         "plate_hint": "رقم التسجيل", "chassis_hint": "رقم الهيكل (VIN)",
-        "profit_margin_hint": "هامش الربح (مثال: 30 مليون)",
+        "profit_margin_hint": "هامش الربح (مثال: 30)",
         "gearbox_label": "علبة السرعة:", "status_label": "الحالة:",
         "not_specified": "غير محدد", "automatic": "أوتوماتيك",
         "manual": "يدوي", "available": "متوفر", "reserved": "محجوز", "sold": "مباع",
@@ -812,7 +810,7 @@ TRANSLATIONS = {
         "no_cars_avail": "لا توجد سيارات متوفرة",
         "no_clients_avail": "لا توجد زبائن",
         "final_price_hint": "السعر الإجمالي النهائي",
-        "paid_hint": "المبلغ المدفوع (العربون بالملايين)",
+        "paid_hint": "المبلغ المدفوع (العربون)",
         "remaining_hint": "المبلغ المتبقي",
         "cancel": "إلغاء", "save": "حفظ", "save_changes": "حفظ التعديلات",
         "save_pdf": "حفظ وإنشاء PDF",
@@ -943,10 +941,10 @@ TRANSLATIONS = {
         "car_name_fr_hint": "Nom en francais",
         "client_name_fr_hint": "Nom et prenom en francais",
         "mileage_hint": "Kilometrage (km)",
-        "price_hint": "Prix (ex: 350 Millions)",
+        "price_hint": "Prix (ex: 350)",
         "trim_hint": "Version", "color_hint": "Couleur",
         "plate_hint": "Immatriculation", "chassis_hint": "N° Chassis (VIN)",
-        "profit_margin_hint": "Marge (ex: 30 Millions)",
+        "profit_margin_hint": "Marge (ex: 30)",
         "gearbox_label": "Boite:", "status_label": "Statut:",
         "not_specified": "Non specifie", "automatic": "Automatique",
         "manual": "Manuelle", "available": "Disponible",
@@ -1895,7 +1893,7 @@ ExceptionManager.add_handler(CrashHandler())
 
 
 # =====================================================================
-#  ArabicField — للحقول أحادية السطر
+#  ArabicField — معدّلة: دعم أفضل للكيبورد + حقول رقمية
 # =====================================================================
 class ArabicField(MDTextField):
     def __init__(self, **kwargs):
@@ -1904,20 +1902,35 @@ class ArabicField(MDTextField):
         self._updating = False
         super().__init__(text='', **kwargs)
         Clock.schedule_once(lambda dt: self._refresh(), 0)
-        
-        
+
+    def on_focus(self, instance, value):
+        """عند استقبال التركيز، أعِد فتح الكيبورد بتأخير صغير."""
+        if value:
+            Clock.schedule_once(self._reopen_keyboard, 0.12)
+
+    def _reopen_keyboard(self, dt):
+        if not self.focus:
+            return
+        try:
+            from kivy.core.window import Window
+            Window.show_keyboard()
+        except Exception as e:
+            print("show_keyboard error:", e)
+
     def on_touch_down(self, touch):
-        if self.collide_point(*touch.pos):
-            # نجبر التركيز على الانتقال للحقل الملموس
-            Clock.schedule_once(lambda dt: setattr(self, "focus", True), 0.05)
+        """اجبر التركيز عند اللمس لتجنّب فقدانه بين الحقول."""
+        if self.collide_point(*touch.pos) and not self.focus:
+            self.focus = True
         return super().on_touch_down(touch)
-    
-    
+
     def _refresh(self, cursor_pos=None):
         self._updating = True
         try:
             txt = self._logical or ''
-            if txt and is_arabic(txt):
+            # الحقول الرقمية: عرض مباشر بدون تشكيل
+            if self.input_filter in ("int", "float"):
+                self.text = txt
+            elif txt and is_arabic(txt):
                 lines = txt.split('\n')
                 reshaped_lines = []
                 for line in lines:
@@ -1952,6 +1965,7 @@ class ArabicField(MDTextField):
         if self._updating:
             return
         sub = substring or ''
+        # فلترة صارمة للحقول الرقمية
         if self.input_filter == 'int':
             sub = ''.join(c for c in sub if c.isdigit())
         elif self.input_filter == 'float':
@@ -2155,11 +2169,13 @@ KV = '''
         text: app.trd("price_hint", app.current_lang)
     FormField:
         id: price_input
+        input_filter: "int"
         icon_left: "cash"
     FormLabel:
         text: app.trd("profit_margin_hint", app.current_lang)
     FormField:
         id: profit_input
+        input_filter: "int"
         icon_left: "chart-line"
     FormLabel:
         text: app.trd("trim_hint", app.current_lang)
@@ -2245,7 +2261,8 @@ KV = '''
         text: app.trd("birth_hint", app.current_lang)
     FormField:
         id: birth_input
-        icon_left: "calendar"
+        input_filter: "int"
+        icon_left: "phone"
     FormLabel:
         text: app.trd("address_hint", app.current_lang)
     FormField:
@@ -2283,16 +2300,19 @@ KV = '''
         text: app.trd("final_price_hint", app.current_lang)
     FormField:
         id: price_input
+        input_filter: "int"
         icon_left: "cash"
     FormLabel:
         text: app.trd("profit_margin_hint", app.current_lang)
     FormField:
         id: profit_input
+        input_filter: "int"
         icon_left: "chart-line"
     FormLabel:
         text: app.trd("paid_hint", app.current_lang)
     FormField:
         id: paid_input
+        input_filter: "int"
         icon_left: "cash-check"
         on_text: app.calculate_remaining(self.text)
     FormLabel:
@@ -3403,7 +3423,6 @@ class AutoManagerApp(MDApp):
     def build(self):
         from kivy.core.window import Window
         Window.clearcolor = (0.95, 0.96, 0.98, 1)
-        Window.softinput_mode = "below_target"
         request_android_permissions()
         self.theme_cls.theme_style = "Light"
         self.theme_cls.primary_palette = "Blue"
@@ -3427,6 +3446,13 @@ class AutoManagerApp(MDApp):
 
     def on_start(self):
         try:
+            # إصلاح مشكلة الكيبورد على Android
+            try:
+                from kivy.core.window import Window
+                Window.softinput_mode = "pan"
+            except Exception as _e:
+                print("softinput_mode error:", _e)
+
             self.load_settings()
             self.refresh_app_logo()
             self.refresh_app_title()
@@ -3602,7 +3628,7 @@ class AutoManagerApp(MDApp):
         if remaining > 0:
             Clock.schedule_once(_tick, 1)
 
-    # ========== نافذة استرجاع كلمة السر (مع زر لصق) ==========
+    # ========== نافذة استرجاع كلمة السر ==========
     def show_recovery_dialog(self):
         from urllib.parse import quote
         L = self.current_lang
@@ -5706,7 +5732,7 @@ class AutoManagerApp(MDApp):
         resolver = PythonActivity.mActivity.getContentResolver()
         max_bytes = 200 * 1024 * 1024
 
-        # 1) محاولة قراءة الحجم (اختياري)
+        # محاولة قراءة الحجم (اختياري)
         try:
             cursor = resolver.query(uri, None, None, None, None)
             if cursor is not None:
@@ -5716,8 +5742,7 @@ class AutoManagerApp(MDApp):
                         if idx >= 0:
                             size = int(cursor.getLong(idx))
                             if size > max_bytes:
-                                raise ValueError(
-                                    f"File too large: {size} bytes")
+                                raise ValueError(f"File too large: {size} bytes")
                 finally:
                     try: cursor.close()
                     except Exception: pass
@@ -5726,7 +5751,6 @@ class AutoManagerApp(MDApp):
         except Exception as e:
             print("size check skipped:", e)
 
-        # 2) نسخ عبر file descriptor (بدون مصفوفات Java)
         pfd = None
         try:
             pfd = resolver.openFileDescriptor(uri, "r")
@@ -5738,7 +5762,6 @@ class AutoManagerApp(MDApp):
 
         fd_in = pfd.detachFd()
 
-        # احذف الوجهة القديمة إن وُجدت
         try:
             if os.path.exists(dest):
                 os.remove(dest)
@@ -5893,14 +5916,12 @@ class AutoManagerApp(MDApp):
 
     # ========== الاسترجاع المُحصّن ==========
     def do_restore(self, path):
-        """استرجاع احترافي: تحقق من الترويسة، نسخ مؤقت، ثم استبدال ذرّي."""
         if self.restore_dialog:
             self.restore_dialog.dismiss()
             self.restore_dialog = None
 
         L = self.current_lang
 
-        # ============ 1) تحقّق من الملف المصدر ============
         try:
             if not path or not os.path.isfile(path):
                 self.notify("الملف غير موجود" if L == "ar"
@@ -5915,16 +5936,13 @@ class AutoManagerApp(MDApp):
             self.notify(f"Error: {str(e)[:50]}")
             return
 
-        # ============ 2) تحقّق أنه SQLite صالح (ترويسة أولاً) ============
         try:
             with open(path, "rb") as f:
                 header = f.read(16)
             if not header or not header.startswith(b"SQLite format 3\x00"):
-                self.notify(
-                    self.tr("invalid_backup")
-                    if self.current_lang == "ar"
-                    else "Not a valid SQLite file (bad header)"
-                )
+                self.notify(self.tr("invalid_backup")
+                            if L == "ar"
+                            else "Not a valid SQLite file (bad header)")
                 return
 
             chk = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
@@ -5935,18 +5953,15 @@ class AutoManagerApp(MDApp):
                 chk.close()
         except Exception as e:
             print("validate sqlite error:", e)
-            self.notify(
-                f"الملف ليس قاعدة بيانات صالحة: {str(e)[:50]}"
-                if self.current_lang == "ar"
-                else f"Not a valid SQLite database: {str(e)[:50]}"
-            )
+            self.notify(f"الملف ليس قاعدة بيانات صالحة: {str(e)[:50]}"
+                        if L == "ar"
+                        else f"Not a valid SQLite database: {str(e)[:50]}")
             return
 
         if not {"cars", "clients", "contracts"} <= names:
             self.notify(self.tr("invalid_backup"))
             return
 
-        # ============ 3) حدود النسخة المجانية ============
         if not self.is_premium():
             try:
                 bc = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
@@ -5964,7 +5979,6 @@ class AutoManagerApp(MDApp):
                     c=n_cars, cl=n_cl, ct=n_ct, lim=FREE_RESTORE_MAX))
                 return
 
-        # ============ 4) احفظ هوية الجهاز الحالية ============
         try:
             old_device_id = get_device_id()
         except Exception as e:
@@ -5976,13 +5990,11 @@ class AutoManagerApp(MDApp):
             print("get_setting license error:", e)
             old_license = ""
 
-        # ============ 5) نسخة أمان قبل الاسترجاع ============
         try:
             self.backup_db("before_restore")
         except Exception as e:
             print("pre-restore backup error:", e)
 
-        # ============ 6) تأكد من وجود مجلد القاعدة ============
         current_db = get_db_path()
         db_directory = os.path.dirname(current_db)
         try:
@@ -5993,7 +6005,6 @@ class AutoManagerApp(MDApp):
                         else "Cannot create database directory")
             return
 
-        # ============ 7) انسخ المصدر إلى ملف مؤقت ============
         temp_db = current_db + ".restore_tmp"
         try:
             if os.path.exists(temp_db):
@@ -6025,7 +6036,6 @@ class AutoManagerApp(MDApp):
                         else f"Copy failed: {str(e)[:60]}")
             return
 
-        # ============ 8) استبدال ذرّي ============
         try:
             if os.path.exists(current_db):
                 os.remove(current_db)
@@ -6041,7 +6051,6 @@ class AutoManagerApp(MDApp):
                         else f"Swap failed: {str(e)[:60]}")
             return
 
-        # ============ 9) بعد الاسترجاع ============
         try:
             init_db()
         except Exception as e:
@@ -6290,6 +6299,7 @@ class AutoManagerApp(MDApp):
                                theme_text_color="Custom", text_color=(0.08, 0.45, 0.75, 1)))
         tf = ArabicField(text=loc_amount(row[0], self.current_lang) if row and row[0] else "",
                          mode="rectangle", font_size="17sp", icon_left="cash",
+                         input_filter="int",
                          line_color_focus=(0.08, 0.45, 0.75, 1))
         box.add_widget(tf)
         self.pay_dialog = self.dlg(
@@ -6508,7 +6518,8 @@ class AutoManagerApp(MDApp):
                                halign="right" if self.current_lang == "ar" else "left",
                                theme_text_color="Custom", text_color=(0.08, 0.45, 0.75, 1)))
         tf = ArabicField(text=default, mode="rectangle", font_size="17sp",
-                         icon_left="cash", line_color_focus=(0.08, 0.45, 0.75, 1))
+                         icon_left="cash", input_filter="int",
+                         line_color_focus=(0.08, 0.45, 0.75, 1))
         box.add_widget(tf)
         self.cancel_dialog = self.dlg(
             title=self.trd("cancel_contract_title"), type="custom",
