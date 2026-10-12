@@ -1838,7 +1838,7 @@ ExceptionManager.add_handler(CrashHandler())
 
 
 # =====================================================================
-#  ArabicField — للحقول أحادية السطر (الاسم، السعر، ...)
+#  ArabicField — للحقول أحادية السطر
 # =====================================================================
 class ArabicField(MDTextField):
     def __init__(self, **kwargs):
@@ -1918,11 +1918,9 @@ class ArabicField(MDTextField):
 
 
 # =====================================================================
-#  ArabicRawField — للتحرير المريح للنصوص الطويلة (بنود العقد)
+#  ArabicRawField — للتحرير المريح للنصوص الطويلة
 # =====================================================================
 class ArabicRawField(MDTextField):
-    """حقل نص عربي يسمح بالكتابة والتحرير الطبيعي (بدون تشكيل أثناء الكتابة).
-    النص المعروض = النص الخام، التشكيل يحدث عند الحفظ/العرض في القوائم."""
     def __init__(self, **kwargs):
         kwargs.setdefault('multiline', True)
         kwargs.setdefault('halign', 'right')
@@ -3415,7 +3413,7 @@ class AutoManagerApp(MDApp):
             except Exception:
                 pass
 
-    # ========== شاشة القفل PIN ==========
+    # ========== شاشة القفل PIN (مُحسّنة: بدون سكرول) ==========
     def show_lock_screen(self):
         L = self.current_lang
         title_txt = (self.ar("أدخل كلمة السر للدخول") if L == "ar"
@@ -3424,22 +3422,27 @@ class AutoManagerApp(MDApp):
         forgot_txt = self.trd("forgot_pin")
 
         box = MDBoxLayout(orientation="vertical", size_hint_y=None,
-                          spacing=dp(14), padding=[dp(20), dp(20), dp(20), dp(20)],
-                          adaptive_height=True)
+                          spacing=dp(12),
+                          padding=[dp(20), dp(16), dp(20), dp(20)],
+                          height=dp(360), width=dp(320))
+
         box.add_widget(MDLabel(
             text=title_txt,
-            size_hint_y=None, height=dp(36), bold=True,
-            font_size="16sp", halign="center",
+            size_hint_y=None, height=dp(34),
+            bold=True, font_size="17sp",
+            halign="center", valign="middle",
             theme_text_color="Custom", text_color=(0.08, 0.45, 0.75, 1)))
 
-        pin_field = MDTextField(mode="rectangle", font_size="22sp",
-                                password=True, halign="center",
-                                icon_left="lock", input_filter="int")
+        pin_field = MDTextField(
+            mode="rectangle", font_size="24sp",
+            password=True, halign="center",
+            icon_left="lock", input_filter="int",
+            size_hint_y=None, height=dp(60))
         box.add_widget(pin_field)
 
         status_lbl = MDLabel(
             text="", size_hint_y=None, height=dp(22),
-            halign="center", font_size="12sp",
+            halign="center", valign="middle", font_size="12sp",
             theme_text_color="Custom", text_color=(0.75, 0.22, 0.17, 1))
         box.add_widget(status_lbl)
 
@@ -3495,7 +3498,7 @@ class AutoManagerApp(MDApp):
         box.add_widget(MDRaisedButton(
             text=btn_txt,
             md_bg_color=(0.08, 0.45, 0.75, 1),
-            size_hint_y=None, height=dp(52),
+            size_hint_y=None, height=dp(50),
             pos_hint={"center_x": 0.5},
             on_release=check_pin))
 
@@ -3531,7 +3534,7 @@ class AutoManagerApp(MDApp):
         if remaining > 0:
             Clock.schedule_once(_tick, 1)
 
-    # ========== نافذة استرجاع كلمة السر ==========
+    # ========== نافذة استرجاع كلمة السر (مع زر لصق) ==========
     def show_recovery_dialog(self):
         from urllib.parse import quote
         L = self.current_lang
@@ -3609,6 +3612,18 @@ class AutoManagerApp(MDApp):
                                  hint_text=self.trd("recovery_code_hint"),
                                  halign="center")
         box.add_widget(code_field)
+
+        def paste_code(_=None):
+            try:
+                pasted = Clipboard.paste() or ""
+                if pasted:
+                    code_field.text = pasted.strip()
+            except Exception as e:
+                print("paste recovery code error:", e)
+        box.add_widget(MDFlatButton(
+            text=self.trd("paste"),
+            pos_hint={"center_x": 0.5},
+            on_release=paste_code))
 
         def on_cancel_recovery(_=None):
             try:
@@ -3787,7 +3802,7 @@ class AutoManagerApp(MDApp):
             buttons=buttons)
         self.security_dialog.open()
 
-    # ========== محرر بنود العقد (نسخة احترافية) ==========
+    # ========== محرر بنود العقد ==========
     def show_articles_editor(self):
         from kivy.uix.scrollview import ScrollView
         from kivy.core.window import Window
@@ -3947,7 +3962,6 @@ class AutoManagerApp(MDApp):
             ])
         self.articles_dialog.open()
 
-    # ---- دوال محرر البنود (جديدة) ----
     def _article_delete(self, idx, refresh_cb):
         if 0 <= idx < len(self._edited_articles):
             del self._edited_articles[idx]
@@ -5765,86 +5779,205 @@ class AutoManagerApp(MDApp):
                                   on_release=lambda x: self.do_restore(path))])
         self.restore_dialog.open()
 
+    # ========== الاسترجاع المُحصّن (يعمل بعد إعادة التثبيت) ==========
     def do_restore(self, path):
-        self.restore_dialog.dismiss()
+        """استرجاع احترافي: نسخ إلى ملف مؤقت، تحقّق، ثم استبدال ذرّي."""
+        if self.restore_dialog:
+            self.restore_dialog.dismiss()
+            self.restore_dialog = None
+
+        L = self.current_lang
+
+        # ============ 1) تحقّق من الملف المصدر ============
+        try:
+            if not path or not os.path.isfile(path):
+                self.notify(self.ar("الملف غير موجود") if L == "ar"
+                            else "Backup file not found")
+                return
+            if os.path.getsize(path) < 100:
+                self.notify(self.ar("الملف فارغ أو تالف") if L == "ar"
+                            else "File is empty or corrupted")
+                return
+        except Exception as e:
+            print("verify source error:", e)
+            self.notify(f"Error: {str(e)[:50]}")
+            return
+
+        # ============ 2) تحقّق أنه SQLite صالح ============
         try:
             chk = sqlite3.connect(path)
-            names = {r[0] for r in chk.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+            names = {r[0] for r in chk.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'")}
             chk.close()
-            if not {"cars", "clients", "contracts"} <= names:
-                self.notify(self.tr("invalid_backup"))
-                return
-            if not self.is_premium():
+        except Exception as e:
+            print("validate sqlite error:", e)
+            self.notify(self.ar("الملف ليس قاعدة بيانات صالحة") if L == "ar"
+                        else "Not a valid SQLite database")
+            return
+
+        if not {"cars", "clients", "contracts"} <= names:
+            self.notify(self.tr("invalid_backup"))
+            return
+
+        # ============ 3) حدود النسخة المجانية ============
+        if not self.is_premium():
+            try:
                 bc = sqlite3.connect(path)
                 n_cars = bc.execute("SELECT COUNT(*) FROM cars").fetchone()[0]
                 n_cl = bc.execute("SELECT COUNT(*) FROM clients").fetchone()[0]
                 n_ct = bc.execute("SELECT COUNT(*) FROM contracts").fetchone()[0]
                 bc.close()
-                if (n_cars > FREE_RESTORE_MAX or n_cl > FREE_RESTORE_MAX
-                        or n_ct > FREE_RESTORE_MAX):
-                    self.notify(self.tr("restore_free_limit").format(
-                        c=n_cars, cl=n_cl, ct=n_ct, lim=FREE_RESTORE_MAX))
-                    return
+            except Exception as e:
+                print("free limits check error:", e)
+                self.notify(self.tr("invalid_backup"))
+                return
+            if (n_cars > FREE_RESTORE_MAX or n_cl > FREE_RESTORE_MAX
+                    or n_ct > FREE_RESTORE_MAX):
+                self.notify(self.tr("restore_free_limit").format(
+                    c=n_cars, cl=n_cl, ct=n_ct, lim=FREE_RESTORE_MAX))
+                return
 
+        # ============ 4) احفظ هوية الجهاز الحالية ============
+        try:
             old_device_id = get_device_id()
+        except Exception as e:
+            print("get_device_id error:", e)
+            old_device_id = ""
+        try:
             old_license = self.get_setting("license_key")
+        except Exception as e:
+            print("get_setting license error:", e)
+            old_license = ""
 
+        # ============ 5) نسخة أمان قبل الاسترجاع ============
+        try:
             self.backup_db("before_restore")
-            src = sqlite3.connect(path)
-            dst = sqlite3.connect(get_db_path())
-            src.backup(dst)
-            dst.close()
-            src.close()
-            init_db()
-            if not self.is_premium():
-                try:
-                    cc = sqlite3.connect(get_db_path())
-                    for k in self._premium_settings_keys():
-                        cc.execute("DELETE FROM settings WHERE key=?", (k,))
-                    cc.commit()
-                    cc.close()
-                except Exception as e:
-                    print("premium settings strip error:", e)
+        except Exception as e:
+            print("pre-restore backup error:", e)
 
-            lc = sqlite3.connect(get_db_path())
-            lc.execute("INSERT OR REPLACE INTO settings(key, value) VALUES('device_id', ?)",
-                       (old_device_id,))
-            if old_license:
-                lc.execute("INSERT OR REPLACE INTO settings(key, value) VALUES('license_key', ?)",
-                           (old_license,))
-            else:
-                lc.execute("DELETE FROM settings WHERE key='license_key'")
-            lc.commit()
-            lc.close()
-            _save_activation(old_device_id, old_license or "")
+        # ============ 6) تأكد من وجود مجلد القاعدة ============
+        current_db = get_db_path()
+        db_directory = os.path.dirname(current_db)
+        try:
+            os.makedirs(db_directory, exist_ok=True)
+        except Exception as e:
+            print("mkdir db dir error:", e)
+            self.notify(self.ar("فشل إنشاء مجلد قاعدة البيانات") if L == "ar"
+                        else "Cannot create database directory")
+            return
+
+        # ============ 7) انسخ المصدر إلى ملف مؤقت ============
+        temp_db = current_db + ".restore_tmp"
+
+        try:
+            if os.path.exists(temp_db):
+                try:
+                    os.remove(temp_db)
+                except Exception:
+                    pass
+
+            src = sqlite3.connect(path)
+            tmp = sqlite3.connect(temp_db)
+            src.backup(tmp)
+            tmp.close()
+            src.close()
+
+            verify = sqlite3.connect(temp_db)
+            names2 = {r[0] for r in verify.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'")}
+            verify.close()
+            if not {"cars", "clients", "contracts"} <= names2:
+                raise ValueError("temp copy is invalid")
+        except Exception as e:
+            print("copy to temp error:", e)
             try:
-                conn2 = sqlite3.connect(get_db_path())
-                conn2.execute("DELETE FROM settings WHERE key='hw_fingerprint'")
-                conn2.commit()
-                conn2.close()
+                if os.path.exists(temp_db):
+                    os.remove(temp_db)
             except Exception:
                 pass
+            self.notify(self.ar(f"فشل النسخ: {str(e)[:60]}") if L == "ar"
+                        else f"Copy failed: {str(e)[:60]}")
+            return
 
-            self.load_cars()
-            self.load_clients()
-            self.load_contracts()
+        # ============ 8) استبدال ذرّي ============
+        try:
+            if os.path.exists(current_db):
+                os.remove(current_db)
+            os.rename(temp_db, current_db)
+        except Exception as e:
+            print("atomic swap error:", e)
+            try:
+                if os.path.exists(temp_db):
+                    os.remove(temp_db)
+            except Exception:
+                pass
+            self.notify(self.ar(f"فشل التبديل: {str(e)[:60]}") if L == "ar"
+                        else f"Swap failed: {str(e)[:60]}")
+            return
+
+        # ============ 9) بعد الاسترجاع ============
+        try:
+            init_db()
+        except Exception as e:
+            print("init_db after restore error:", e)
+
+        # احذف إعدادات الشركة/البنك إن كان مجانياً
+        if not self.is_premium():
+            try:
+                cc = sqlite3.connect(current_db)
+                for k in self._premium_settings_keys():
+                    cc.execute("DELETE FROM settings WHERE key=?", (k,))
+                cc.commit()
+                cc.close()
+            except Exception as e:
+                print("strip premium error:", e)
+
+        # أعد كتابة هوية الجهاز
+        try:
+            lc = sqlite3.connect(current_db)
+            if old_device_id:
+                lc.execute(
+                    "INSERT OR REPLACE INTO settings(key, value) VALUES('device_id', ?)",
+                    (old_device_id,))
+            if old_license:
+                lc.execute(
+                    "INSERT OR REPLACE INTO settings(key, value) VALUES('license_key', ?)",
+                    (old_license,))
+            else:
+                lc.execute("DELETE FROM settings WHERE key='license_key'")
+            lc.execute("DELETE FROM settings WHERE key='hw_fingerprint'")
+            lc.commit()
+            lc.close()
+        except Exception as e:
+            print("rewrite identity error:", e)
+
+        # أعد كتابة ملفات التفعيل الخارجية
+        try:
+            _save_activation(old_device_id or "", old_license or "")
+        except Exception as e:
+            print("save_activation error:", e)
+
+        # أعد تحميل كل شيء
+        try:
+            self.load_all_data()
             self.load_settings()
             self.refresh_app_logo()
             self.refresh_app_title()
             self.refresh_premium_ui()
             self.refresh_security_btn()
             self.refresh_last_backup_text()
-            self.notify(self.tr("db_restore_success"))
         except Exception as e:
-            print("do_restore error:", e)
-            self.notify(self.tr("save_error"))
-        finally:
-            try:
-                temp_path = os.path.abspath(os.path.join(private_dir(), "restore_tmp.db"))
-                if os.path.abspath(path) == temp_path and os.path.isfile(temp_path):
-                    os.remove(temp_path)
-            except Exception as cleanup_error:
-                print("restore temp cleanup warning:", cleanup_error)
+            print("reload after restore error:", e)
+
+        self.notify(self.tr("db_restore_success"))
+
+        # تنظيف ملف SAF المؤقت
+        try:
+            temp_saf = os.path.abspath(os.path.join(private_dir(), "restore_tmp.db"))
+            if os.path.abspath(path) == temp_saf and os.path.isfile(temp_saf):
+                os.remove(temp_saf)
+        except Exception as e:
+            print("saf temp cleanup error:", e)
 
     # ========== الإحصائيات ==========
     def show_stats(self):
